@@ -39,9 +39,8 @@ from act_pump.srv import service1
 # xArm.initialize_robot()
 
 """
-UPDATE THIS
+UPDATE Readme
 """
-sensor = False
 
 # def m_1 (self, num_frames, timeout):
 #     rospy.loginfo('Finding nearest Cornstalk')
