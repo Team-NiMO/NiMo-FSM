@@ -145,7 +145,7 @@ class state2(smach.State):
     def __init__(self):
         smach.State.__init__(self,
                             outcomes = ['insertion','replace'],
-                            input_keys = ['c_c_ip'])
+                            input_keys = ['state_2_ip'])
         
     def execute(self, userdata):
         rospy.loginfo('Running State 2')
