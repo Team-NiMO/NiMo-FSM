@@ -42,28 +42,28 @@ from act_pump.srv import service1
 UPDATE Readme
 """
 
-# def m_1 (self, num_frames, timeout):
-#     rospy.loginfo('Finding nearest Cornstalk')
+def m_1 (self, num_frames, timeout):
+    rospy.loginfo('Finding nearest Cornstalk')
 
-#     rospy.wait_for_service('get_stalk')
-#     # GetStalk is the .srv file
-#     # get_stalk: name of the service being called
-#     # stalk: service client object
-#     # output_1: this has three outputs - string(success), int(num_frames), stalk_detect/grasp_point[] (grasp_points) {grasp_points is an array of type stalk_detect (which is basically x,y,z coordinate)}
-#     # TODO: (should be accessible from all the methods of the class) near_cs: unordered list (dict) of nearby cornstalks with key = hashvalue of the 
-#     stalk = rospy.ServiceProxy('get_stalk', GetStalk)
-#     try:
-#         output_1 = stalk(num_frames=num_frames, timeout=timeout)
-#         grasp_points = output_1.grasp_points
-#         flag = output_1.success
+    rospy.wait_for_service('get_stalk')
+    # GetStalk is the .srv file
+    # get_stalk: name of the service being called
+    # stalk: service client object
+    # output_1: this has three outputs - string(success), int(num_frames), stalk_detect/grasp_point[] (grasp_points) {grasp_points is an array of type stalk_detect (which is basically x,y,z coordinate)}
+    # TODO: (should be accessible from all the methods of the class) near_cs: unordered list (dict) of nearby cornstalks with key = hashvalue of grasppoints
+    stalk = rospy.ServiceProxy('get_stalk', GetStalk)
+    try:
+        output_1 = stalk(num_frames=num_frames, timeout=timeout)
+        grasp_points = output_1.grasp_points
+        flag = output_1.success
 
-#         for i,point in enumerate(grasp_points):
-#             rospy.loginfo('Point %d - x: %f, y: %f, z: %f', i, point.position.x, point.position.y, point.position.z)
+        for i,point in enumerate(grasp_points):
+            rospy.loginfo('Point %d - x: %f, y: %f, z: %f', i, point.position.x, point.position.y, point.position.z)
 
-#     except rospy.ServiceException as exc:
-#         rospy.loginfo('Service did not process request: ' + str(exc))
+    except rospy.ServiceException as exc:
+        rospy.loginfo('Service did not process request: ' + str(exc))
 
-#     return flag
+    return flag
 
 # def m_2 (self, num_frames, timeout):
 #     rospy.loginfo('Doing Width Detection')
