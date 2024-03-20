@@ -39,7 +39,7 @@ from act_pump.srv import service1
 # xArm.initialize_robot()
 
 """
-UPDATE Readme
+UPDATE Readme - asap
 """
 
 class FSM:
