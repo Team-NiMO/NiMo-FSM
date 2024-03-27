@@ -42,13 +42,13 @@ class Utils:
     def __init__(self):
         self.near_cs = {}
         self.threshold = 0.1
+        self.good_width_ang = []
 
     # GetStalk is the .srv file
     # get_stalk: name of the service being called
     # stalk: service client object
     # output_1: this has three outputs - string(success), int(num_frames), stalk_detect/grasp_point[] (grasp_points) {grasp_points is an array of type stalk_detect (which is basically x,y,z coordinate)}
     # near_cs: unordered list (dict) of nearby cornstalks with key = hashvalue of grasppoints
-    #TODO: add threshold logic
     def get_grasp (self, num_frames, timeout):
 
         rospy.loginfo('Finding nearest Cornstalk')
@@ -63,27 +63,32 @@ class Utils:
 
             if (flag == "DONE"):
 
-                for i,point in enumerate(grasp_points):
+                for i, point in enumerate(grasp_points):
                     grasp_coordinates = (point.position.x, point.position.y, point.position.z)
                     print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z}")
+                    new = True
 
                     if bool(self.near_cs):
-                        print("if near_cs is not empty")
-                        for cs in self.near_cs:
+                        # print("if near_cs is not empty")
+                        for j, cs in enumerate(self.near_cs):
                             
                             # print(f"grasp_point: {grasp_coordinates}, cs: {cs}")
+                            print("Comparing {} with {} = {}".format(i, j, np.linalg.norm(np.array(grasp_coordinates) - np.array(cs))))
                             if (np.linalg.norm(np.array(grasp_coordinates) - np.array(cs))) < self.threshold:
-                                print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z} in if")
-                                print("Print the near_cs list")
+                                # print((np.linalg.norm(np.array(grasp_coordinates) - np.array(cs))))
+                                # print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z} in if")
+                                # print("Print the near_cs list")
                                 print(self.near_cs)
                                 print("Corn already visited")
+                                new = False
+                                break
 
-                            else:
-                                print("Grasp point not in the list, so add it to the list")
-                                self.near_cs[grasp_coordinates] = grasp_coordinates
-                                print(f"The list is: {self.near_cs}")
-                                rospy.loginfo(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z} in else")
-                                return "SUCCESS"
+                        if new == True:
+                            print("Grasp point not in the list, so add it to the list")
+                            self.near_cs[grasp_coordinates] = grasp_coordinates
+                            print(f"The list is: {self.near_cs}")
+                            # rospy.loginfo(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z} in else")
+                            return "SUCCESS"
                     else:
                         self.near_cs[grasp_coordinates] = grasp_coordinates
                         print("near_cs is empty, so first grasp point added to the list")
@@ -96,24 +101,27 @@ class Utils:
             #     return "REPOSITION"
 
         except rospy.ServiceException as exc:
-            rospy.loginfo('Service did not process request: ' + str(exc))
+            rospy.logerr('Service did not process request: ' + str(exc))
 
         return "REPOSITION"
     
-    # def suitable_width (self, num_frames, timeout):  # m_2 --> suitable_width
-    #     rospy.loginfo('Doing Width Detection')
-    #     rospy.wait_for_service('get_width')
-    #     stalk_width = rospy.ServiceProxy('get_width', GetWidth)
-    #     try:
-    #         output_2 = stalk_width(num_frames=num_frames, timeout=timeout)
-    #         width = output_2.width
-    #         flag = output_2.success
+    def get_width (self, num_frames, timeout):
+        rospy.loginfo('Doing Width Detection')
+        rospy.wait_for_service('get_width')
+        stalk_width = rospy.ServiceProxy('get_width', GetWidth)
+        try:
+            output_2 = stalk_width(num_frames=num_frames, timeout=timeout)
+            width = output_2.width
+            flag = output_2.success
 
-    #         rospy.loginfo('width: %f', width)
-    #     except rospy.ServiceException as exc:
-    #         rospy.loginfo('Service did not process request: ' + str(exc))
+            if (flag == "DONE"):
+                return width
+
+            rospy.loginfo('width: %f', width)
+        except rospy.ServiceException as exc:
+            rospy.loginfo('Service did not process request: ' + str(exc))
         
-    #     return flag
+        return 0
 
     # def m_3 (self, pumps):
 
@@ -137,16 +145,25 @@ class state1(smach.State):
                             outcomes = ['cleaning_calibrating'],
                             input_keys = ['state_1_input'])
         self.utils = utils
+        self.width_ang = []
         
     def execute(self, userdata):
-        rospy.loginfo('Running State 1: Finding Cornstalk')
+        # rospy.loginfo('Running State 1: Finding Cornstalk')
 
         # xarm_flag = stow_position()
-
-        grasp_flag = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
-        print("Output from find_stalk method: %s", grasp_flag)
+    
+        # grasp_flag = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
+        # print("Output from find_stalk method: %s", grasp_flag)
         
-        # flag_2 = m_2(self, userdata.state_1_input[0], userdata.state_1_input[1])
+        for i in range(5):
+            #calling arc_move ---> returns angle
+            angle = 15*i
+            width = self.utils.get_width(userdata.state_1_input[0], userdata.state_1_input[1])
+            pair = (angle, width)
+            self.width_ang.append(pair)
+        print(f"angle width pair is: {self.width_ang}")
+        max_width = max(self.width_ang, key = lambda x:x[1])
+        print(f"Maximum width {max_width[1]} is at angle {max_width[0]}")
 
         # rospy.INFO('Output from find_width method: %s', flag_2)
         # print("Output from find_stalk method: %s", flag_2)
@@ -161,7 +178,7 @@ class state2(smach.State):
                             input_keys = ['state_2_ip'])
 
     def execute(self, userdata):
-        rospy.loginfo('Running State 2: Cleaning and Calibrating')
+        # rospy.loginfo('Running State 2: Cleaning and Calibrating')
 
         return 'insertion'
 
@@ -174,7 +191,7 @@ class state3(smach.State):
                             input_keys = ['state_3_ip'])
 
     def execute(self, userdata):
-        rospy.loginfo('Running State 3: Insertion')
+        # rospy.loginfo('Running State 3: Insertion')
 
         # flag = m_3(self, userdata.state_3_ip)
         # print("Output from EM method: %s", flag)
@@ -189,7 +206,7 @@ class state4(smach.State):
                             input_keys = ['state_4_ip'])
     
     def execute(self, userdata):
-        rospy.loginfo('Running State 4')
+        # rospy.loginfo('Running State 4')
         # flag = m_3(self, userdata.state4_ip)
         # print("Output from EM method: %s", flag)
 
@@ -208,7 +225,7 @@ class FSM:
         start_state.userdata.flag_a = 1
         start_state.userdata.flag_b = 2
         start_state.userdata.flag_c = 3
-        start_state.userdata.find_stalk = (5, 10.0)  # a tuple of num_frames and timeout
+        start_state.userdata.find_stalk = (2, 10.0)  # a tuple of num_frames and timeout
         start_state.userdata.gopump = "pumpsoff"
 
         with start_state:
