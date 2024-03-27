@@ -24,7 +24,7 @@ from stalk_detect.srv import GetWidth
 from stalk_detect.msg import grasp_point
 
 # External Mechanisms
-from act_pump.srv import service1
+# from act_pump.srv import service1
 
 # Global terms:
 # xArm = xArm_Motion.xArm_Motion("192.168.1.196") # xArm6 IP address
@@ -39,14 +39,14 @@ UPDATE Readme - asap
 class Utils:
 
     def __init__(self):
-        print("Utils class")
         self.near_cs = {}
 
     # GetStalk is the .srv file
     # get_stalk: name of the service being called
     # stalk: service client object
     # output_1: this has three outputs - string(success), int(num_frames), stalk_detect/grasp_point[] (grasp_points) {grasp_points is an array of type stalk_detect (which is basically x,y,z coordinate)}
-    # TODO: (should be accessible from all the methods of the class) near_cs: unordered list (dict) of nearby cornstalks with key = hashvalue of grasppoints
+    # near_cs: unordered list (dict) of nearby cornstalks with key = hashvalue of grasppoints
+    #TODO: add threshold logic
     def get_grasp (self, num_frames, timeout):
 
         rospy.loginfo('Finding nearest Cornstalk')
@@ -54,30 +54,30 @@ class Utils:
         stalk = rospy.ServiceProxy('get_stalk', GetStalk)
 
         try:
-            print("in try")
+        
             output_1 = stalk(num_frames=num_frames, timeout=timeout)
             flag = output_1.success
             grasp_points = output_1.grasp_points
-            print(f"is this working? {flag}")
 
-            # for i,point in enumerate(grasp_points):
-            #     print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z}")
+            if (flag == "DONE"):
 
-            # if (flag == "SUCCESS"):
+                for i,point in enumerate(grasp_points):
+                    grasp_coordinates = (point.position.x, point.position.y, point.position.z)
+                    print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z}")
 
-            #     for i,point in enumerate(grasp_points):
-            #         grasp_coordinates = (point.position.x, point.position.y, point.position.z)
-            #         print("Print the grasp_coordinates: x: %f, y: %f, z: %f", point.position.x, point.position.y, point.position.z)
-            #         if grasp_coordinates in self.near_cs:
-            #             print("Print the grasp_coordinates: x: %f, y: %f, z: %f", point.position.x, point.position.y, point.position.z)
-            #             print("Print the near_cs list")
-            #             print(self.near_cs)
-            #             print("Corn already visited")
-            #             continue #if point is in the near_cs dictionary, then continue to the next grasp_point 
+                    if grasp_coordinates in self.near_cs:
+                       
+                       print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z}")
+                       print("Print the near_cs list")
+                       print(self.near_cs)
+                       print("Corn already visited")
+                       continue #if point is in the near_cs dictionary, then continue to the next grasp_point 
 
-            #         else:
-            #             self.near_cs[grasp_coordinates] = point
-            #             rospy.loginfo('Point %d - x: %f, y: %f, z: %f', i, point.position.x, point.position.y, point.position.z)
+                    else:
+                        print("Grasp point not in the list, so add it to the list")
+                        self.near_cs[grasp_coordinates] = point
+                        print(f"The list is: {self.near_cs}")
+                        rospy.loginfo(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z}")
 
         except rospy.ServiceException as exc:
             rospy.loginfo('Service did not process request: ' + str(exc))
@@ -145,7 +145,7 @@ class state2(smach.State):
                             input_keys = ['state_2_ip'])
 
     def execute(self, userdata):
-        rospy.loginfo('Running State 2')
+        rospy.loginfo('Running State 2: Cleaning and Calibrating')
 
         return 'insertion'
 
@@ -158,7 +158,7 @@ class state3(smach.State):
                             input_keys = ['state_3_ip'])
 
     def execute(self, userdata):
-        rospy.loginfo('Running State 3')
+        rospy.loginfo('Running State 3: Insertion')
 
         # flag = m_3(self, userdata.state_3_ip)
         # print("Output from EM method: %s", flag)
@@ -169,12 +169,14 @@ class state4(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['replace_stop'])
+                            outcomes = ['replace_stop'],
+                            input_keys = ['state_4_ip'])
     
     def execute(self, userdata):
-        rospy.loginfo('Running State 3')
+        rospy.loginfo('Running State 4')
         # flag = m_3(self, userdata.state4_ip)
         # print("Output from EM method: %s", flag)
+
         return 'replace_stop'
 
 class FSM:
@@ -204,8 +206,12 @@ class FSM:
                                 remapping = {'c_c_ip':'flag_b'})  # Go to State B
             
             smach.StateMachine.add('Insertion',state3(self.utils),
-                                transitions = {'replace':'stop'},
+                                transitions = {'replace':'Replace'},
                                 remapping = {'state_3_ip':'gopump'})  # Go to State B
+            
+            smach.StateMachine.add('Replace',state4(self.utils),
+                    transitions = {'replace_stop':'Finding_Cornstalk'},    # should be 'stop' instead of 'Finding_Cornstalk'
+                    remapping = {'state_4_ip':'gopump'})  # Go to State B
             
             # ADD state 4 stupid
         
