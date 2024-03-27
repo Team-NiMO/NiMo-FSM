@@ -4,6 +4,7 @@ import time
 import math
 import argparse
 import signal
+import numpy as np
 
 # ROS
 import rospy
@@ -40,6 +41,7 @@ class Utils:
 
     def __init__(self):
         self.near_cs = {}
+        self.threshold = 0.1
 
     # GetStalk is the .srv file
     # get_stalk: name of the service being called
@@ -65,24 +67,38 @@ class Utils:
                     grasp_coordinates = (point.position.x, point.position.y, point.position.z)
                     print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z}")
 
-                    if grasp_coordinates in self.near_cs:
-                       
-                       print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z}")
-                       print("Print the near_cs list")
-                       print(self.near_cs)
-                       print("Corn already visited")
-                       continue #if point is in the near_cs dictionary, then continue to the next grasp_point 
+                    if bool(self.near_cs):
+                        print("if near_cs is not empty")
+                        for cs in self.near_cs:
+                            
+                            # print(f"grasp_point: {grasp_coordinates}, cs: {cs}")
+                            if (np.linalg.norm(np.array(grasp_coordinates) - np.array(cs))) < self.threshold:
+                                print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z} in if")
+                                print("Print the near_cs list")
+                                print(self.near_cs)
+                                print("Corn already visited")
 
+                            else:
+                                print("Grasp point not in the list, so add it to the list")
+                                self.near_cs[grasp_coordinates] = grasp_coordinates
+                                print(f"The list is: {self.near_cs}")
+                                rospy.loginfo(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z} in else")
+                                return "SUCCESS"
                     else:
-                        print("Grasp point not in the list, so add it to the list")
-                        self.near_cs[grasp_coordinates] = point
-                        print(f"The list is: {self.near_cs}")
-                        rospy.loginfo(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z}")
+                        self.near_cs[grasp_coordinates] = grasp_coordinates
+                        print("near_cs is empty, so first grasp point added to the list")
+                        return "SUCCESS"
+                    
+            elif (flag == "ERROR"):
+                return "ERROR"
+            
+            # else:
+            #     return "REPOSITION"
 
         except rospy.ServiceException as exc:
             rospy.loginfo('Service did not process request: ' + str(exc))
 
-        return flag
+        return "REPOSITION"
     
     # def suitable_width (self, num_frames, timeout):  # m_2 --> suitable_width
     #     rospy.loginfo('Doing Width Detection')
