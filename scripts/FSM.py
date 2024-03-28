@@ -29,7 +29,8 @@ class FindStalk(smach.State):
         resp = GoHomeService()
 
         # Find the grasp points of nearby stalks
-        resp = GetStalkService(num_frames=3, timeout=10.0)
+        # resp = GetStalkService(num_frames=3, timeout=10.0)
+        resp = GetStalkResponse(grasp_points=(grasp_point(position=Point(x=0.2, y=-0.5, z=0.6)), grasp_point(position=Point(x=0.2, y=-0.5, z=0.6)))) # NOTE: TEMPORARY
         
         # Iterate through stalks
         for new_point in resp.grasp_points:
@@ -45,16 +46,17 @@ class FindStalk(smach.State):
                 break
         
         # Move the xArm to the stalk
-        Point(x = visited_stalks[-1][0],
-              y = visited_stalks[-1][1],
-              z = visited_stalks[-1][2])
-        resp = GoCornService(grasp_point=visited_stalks[-1])
+        current_stalk = Point(x = visited_stalks[-1][0],
+                              y = visited_stalks[-1][1],
+                              z = visited_stalks[-1][2])
+        resp = GoCornService(grasp_point=current_stalk)
         
         width_angle = []
 
         # Move to minimum angle and get first width
         arc_resp = ArcCornService(relative_angle=-30)
-        width_resp = GetWidthService(num_frames=3, timeout=10.0)
+        # width_resp = GetWidthService(num_frames=3, timeout=10.0)
+        width_resp = GetWidthResponse(width=25.0+np.random.rand())  # NOTE: TEMPORARY
 
         width_angle.append((width_resp.width, arc_resp.absolute_angle))
         
@@ -64,23 +66,25 @@ class FindStalk(smach.State):
             arc_resp = ArcCornService(relative_angle=15)
 
             # Get width of stalk
-            width_resp = GetWidthService(num_frames=3, timeout=10.0)
+            # width_resp = GetWidthService(num_frames=3, timeout=10.0)
+            width_resp = GetWidthResponse(width=25.0+np.random.rand())  # NOTE: TEMPORARY
 
             width_angle.append((width_resp.width, arc_resp.absolute_angle))
         
         # Find angle corresponding to largest width
-        insertion_angle = max(self.width_angle, key = lambda x:x[1])
+        insertion_angle = width_angle[np.argmax(np.array(width_angle)[:, 0])][1]
 
         return 'next_waypoint'
 
+# TODO: Set timeouts for services and errors if not found
 def loadServices():
     global GoHomeService, GetStalkService, GoCornService, ArcCornService, GetWidthService
 
-    # Perception
-    rospy.wait_for_service('get_stalk')
-    GetStalkService = rospy.ServiceProxy('get_stalk', GetStalk)
-    rospy.wait_for_service('get_width')
-    GetWidthService = rospy.ServiceProxy('get_width', GetWidth)
+    # # Perception # NOTE: TEMPORARY
+    # rospy.wait_for_service('get_stalk')
+    # GetStalkService = rospy.ServiceProxy('get_stalk', GetStalk)
+    # rospy.wait_for_service('get_width')
+    # GetWidthService = rospy.ServiceProxy('get_width', GetWidth)
 
     # Manipulation
     rospy.wait_for_service('GoHome')
