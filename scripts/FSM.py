@@ -11,7 +11,7 @@ VERBOSE = True
 
 # TODO: Add error handling for services
 
-class FindStalk():
+class FindStalk(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['error','next_waypoint','done'])
 
@@ -49,7 +49,7 @@ if __name__ == "__main__":
         smach.StateMachine.add('FIND_STALK', FindStalk(), 
                                transitions={'error':'error',
                                             'next_waypoint':'next_waypoint',
-                                            'done':'CLEAN_CALIBRATE'})
+                                            'done':'error'})
         # smach.StateMachine.add('CLEAN_CALIBRATE', CleanCalibrate(), 
         #                        transitions={'error':'error',
         #                                     'replace_sensor':'replace_sensor',
