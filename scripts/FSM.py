@@ -1,204 +1,370 @@
-#!/usr/bin/env python
+import os
+import sys
+import time
+import math
+import argparse
+import signal
 import numpy as np
+
+# ROS
 import rospy
+import tf2_ros
+from geometry_msgs.msg import Point
+
+# FSM
 import smach
 import smach_ros
 
-from geometry_msgs.msg import Point
+# custom helper library
+# import xArm_Motion as xArm_Motion
+# import utils_plot as fsm_plot
 
-from stalk_detect.srv import *
+# Perception
+from stalk_detect.srv import GetStalk
+from stalk_detect.srv import GetWidth
+
+# External Mechanisms
+# from act_pump.srv import service1
+
+# Manipulation
 from nimo_manipulation.srv import *
 
-from stalk_detect.msg import *
+# Global terms:
+# xArm = xArm_Motion.xArm_Motion("192.168.1.196") # xArm6 IP address
+# xArm.initialize_robot()
 
-VERBOSE = True
+# xArm = xArm_Motion.xArm_Motion("192.168.1.196") # xArm6 IP address
+# xArm.initialize_robot()
 
-# TODO: Add error handling for services
+"""
+UPDATE Readme - asap
+"""
+class Utils:
 
-class FindStalk(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['error','next_waypoint','done'])
+        #TODO: Empty the list after every restart operation?
+        self.near_cs = []
+        self.threshold = 0.1
+        self.insertion_ang = None
 
-    def execute(self, userdata):
-        if VERBOSE: rospy.loginfo("State: FindStalk")
+        self.GoHomeService = None
+        self.GoCornService = None
+        self.ArcCornService = None
 
-        global visited_stalks, insertion_angle
-        global GoHomeService, GetStalkService, GoCornService, ArcCornService, GetWidthService
+    # GetStalk is the .srv file
+    # get_stalk: name of the service being called
+    # stalk: service client object
+    # output_1: this has three outputs - string(success), int(num_frames), stalk_detect/grasp_point[] (grasp_points) {grasp_points is an array of type stalk_detect (which is basically x,y,z coordinate)}
+    # near_cs: unordered list of nearby cornstalks
+    def get_grasp (self, num_frames, timeout):
 
-        # Find the grasp points of nearby stalks
-        # resp = GetStalkService(num_frames=3, timeout=10.0)
-        resp = GetStalkResponse(grasp_points=(grasp_point(position=Point(x=0.2, y=-0.5, z=0.6)), grasp_point(position=Point(x=0.0, y=-0.5, z=0.6)))) # NOTE: TEMPORARY
+        rospy.loginfo('Finding nearest Cornstalk')
+        rospy.wait_for_service('get_stalk')
+        stalk = rospy.ServiceProxy('get_stalk', GetStalk)
+
+        try:
         
-        # Iterate through stalks
-        for new_point in resp.grasp_points:
-            new_stalk = True
-            new_point = (new_point.position.x, new_point.position.y, new_point.position.z)
-            for old_point in visited_stalks:
-                if np.linalg.norm(np.array(new_point) - np.array(old_point)) < 0.1:
-                    new_stalk = False
-                    break
+            output_1 = stalk(num_frames=num_frames, timeout=timeout)
+            flag = output_1.success
+            grasp_points = output_1.grasp_points
 
-            if new_stalk == True:
-                visited_stalks.append(new_point)
-                break
+            if (flag == "DONE"):
 
-        if new_stalk == False:
-            if VERBOSE: rospy.loginfo("No new stalks detected, move to next waypoint")
-            return 'next_waypoint'
-        
-        # Move the xArm to the stalk
-        current_stalk = Point(x = visited_stalks[-1][0],
-                              y = visited_stalks[-1][1],
-                              z = visited_stalks[-1][2])
-        resp = GoCornService(grasp_point=current_stalk)
-        
-        width_angle = []
+                for i, point in enumerate(grasp_points):
+                    grasp_coordinates = (point.position.x, point.position.y, point.position.z)
+                    print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z}")
+                    new = True
 
-        # Move to minimum angle and get first width
-        arc_resp = ArcCornService(relative_angle=-30)
-        # width_resp = GetWidthService(num_frames=3, timeout=10.0)
-        width_resp = GetWidthResponse(width=25.0+np.random.rand())  # NOTE: TEMPORARY
+                    if bool(self.near_cs):
+                        # print("if near_cs is not empty")
+                        for j, cs in enumerate(self.near_cs):
+                            
+                            # print(f"grasp_point: {grasp_coordinates}, cs: {cs}")
+                            print("Comparing {} with {} = {}".format(i, j, np.linalg.norm(np.array(grasp_coordinates) - np.array(cs))))
+                            if (np.linalg.norm(np.array(grasp_coordinates) - np.array(cs))) < self.threshold:
+                                # print((np.linalg.norm(np.array(grasp_coordinates) - np.array(cs))))
+                                # print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z} in if")
+                                # print("Print the near_cs list")
+                                print(self.near_cs)
+                                print("Corn already visited")
+                                new = False
+                                break
 
-        width_angle.append((width_resp.width, arc_resp.absolute_angle))
-        
-        # Measure width and orientation
-        for i in range(4):
-            # Move xArm
-            arc_resp = ArcCornService(relative_angle=15)
+                        if new == True:
+                            print("Grasp point not in the list, so add it to the list")
+                            self.near_cs.append(grasp_coordinates)
+                            print(f"The list is: {self.near_cs}")
+                            # rospy.loginfo(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z} in else")
+                            return "SUCCESS"
+                    else:
+                        self.near_cs.append(grasp_coordinates)
+                        print("near_cs is empty, so first grasp point added to the list")
+                        return "SUCCESS"
+                    
+            elif (flag == "ERROR"):
+                return "ERROR"
 
-            # Get width of stalk
-            # width_resp = GetWidthService(num_frames=3, timeout=10.0)
-            width_resp = GetWidthResponse(width=25.0+np.random.rand())  # NOTE: TEMPORARY
+        except rospy.ServiceException as exc:
+            rospy.logerr('Service did not process request: ' + str(exc))
+            return "ERROR"
 
-            width_angle.append((width_resp.width, arc_resp.absolute_angle))
-        
-        # Find angle corresponding to largest width
-        insertion_angle = width_angle[np.argmax(np.array(width_angle)[:, 0])][1]
-
-        # Return the xArm to home
-        resp = GoHomeService()
-
-        return 'done'
-
-class CleanCalibrate(smach.State):
-    def __init__(self):
-        smach.State.__init__(self, outcomes=['error','replace_sensor','done'])
-
-    def execute(self, userdata):
-        if VERBOSE: rospy.loginfo("State: CleanCalibrate")
-
-        global GoHomeService, GoEMService
-
-        # Move xArm to cleaning pump
-        resp = GoEMService(id="clean")
-        # actuate clean 
-
-        # Move xArm to low calibration pump
-        resp = GoEMService(id="cal_low")
-        # actuate cal_low
-        # get_cal_dat high
-
-        # Move xArm to high calibration pump
-        resp = GoEMService(id="cal_high")
-        # actuate cal_high
-        # get_cal_dat high
-
-        # Move xArm to cleaning pump
-        resp = GoEMService(id="clean")
-        # actuate clean 
-
-        # Return the xArm to home
-        resp = GoHomeService()
-
-        return 'done'
+        return "REPOSITION"
     
-class InsertSensor(smach.State):
-    def __init__(self):
-        smach.State.__init__(self, outcomes=['error','replace_sensor','done'])
+    def get_width (self, num_frames, timeout):
+        rospy.loginfo('Doing Width Detection')
+        rospy.wait_for_service('get_width')
+        stalk_width = rospy.ServiceProxy('get_width', GetWidth)
+        try:
+            output_2 = stalk_width(num_frames=num_frames, timeout=timeout)
+            width = output_2.width
+            flag = output_2.success
+
+            if (flag == "DONE"):
+                return width
+
+            rospy.loginfo('width: %f', width)
+        except rospy.ServiceException as exc:
+            rospy.loginfo('Service did not process request: ' + str(exc))
+            return "ERROR"
+        
+        return "ERROR"
+    
+    def manipulation(self):
+        rospy.wait_for_service('GoHome')
+        self.GoHomeService = rospy.ServiceProxy('GoHome', GoHome)
+        rospy.wait_for_service('GoCorn')
+        self.GoCornService = rospy.ServiceProxy('GoCorn', GoCorn)
+        rospy.wait_for_service('ArcCorn')
+        self.ArcCornService = rospy.ServiceProxy('ArcCorn', ArcCorn)
+        rospy.wait_for_service('HookCorn')
+        self.HookCornService = rospy.ServiceProxy('HookCorn', HookCorn)
+        rospy.wait_for_service('UnhookCorn')
+        self.UnhookCornService = rospy.ServiceProxy('UnhookCorn', UnhookCorn)
+
+
+# State 1 - Finding Cornstalk
+#TODO: error handling. Proceed to grasp_stalk only after success flag
+class state1(smach.State):
+
+    def __init__(self, utils):
+        smach.State.__init__(self,
+                            outcomes = ['cleaning_calibrating','restart'],
+                            input_keys = ['state_1_input'])
+        self.utils = utils
+        self.width_ang = []
+        
+    def execute(self, userdata):
+
+        try:
+            
+            manipulator = self.utils
+            manipulator.manipulation()
+            # Move xArm to Home position
+            HomeOutput = manipulator.GoHomeService()
+            HomeFlag = HomeOutput.success
+
+            # If error in moving to xArm, restart FSM
+            if (HomeFlag == "ERROR"):
+                print("Error in HomeFlag")
+                return 'restart'
+            
+            # Get Grasp Point (last point added to the near_cs list)
+            grasp_flag = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
+            if (grasp_flag == "ERROR"):
+                print("Error in Grasp flag")
+                return 'restart'
+            elif (grasp_flag == "REPOSITION"):
+                return 'restart'
+            current_stalk = Point(x = self.utils.near_cs[-1][0],
+                                  y = self.utils.near_cs[-1][1],
+                                  z = self.utils.near_cs[-1][2])
+            
+            # Move xArm to that CornStalk
+            Go2CornOutput = manipulator.GoCornService(grasp_point = current_stalk)
+            if (Go2CornOutput.success == "ERROR"):
+                print("Error in Go 2 corn")
+                return 'restart'
+            
+            # Find Suitable width of the Cornstalk
+            width_ang = []
+
+            ArcMoveOutput = manipulator.ArcCornService(relative_angle=-30)
+            if (ArcMoveOutput.success == "ERROR"):
+                print("Error in Arc Move")
+                return 'restart'
+            
+            width = self.utils.get_width(userdata.state_1_input[0], userdata.state_1_input[1])
+            width_ang.append((width, ArcMoveOutput.absolute_angle))
+
+            for i in range(4):
+                ArcMoveOutput = manipulator.ArcCornService(relative_angle=15)
+                if (ArcMoveOutput.success == "ERROR"):
+                    print("Error in Arc Move")
+                    return 'restart'
+                width = self.utils.get_width(userdata.state_1_input[0], userdata.state_1_input[1])
+                width_ang.append((width, ArcMoveOutput.absolute_angle))
+        
+            # print(f"angle width pair is: {self.width_ang}")
+            max_pair = max(width_ang, key = lambda x:x[0])
+            self.utils.insertion_ang = max_pair[1]
+
+            print(f"Width Angle list is: {width_ang}")
+            print(f"Insertion angle is: {self.utils.insertion_ang}")
+
+        except rospy.ServiceException as exc:
+            rospy.loginfo('Service did not process request: ' + str(exc))
+            return 'restart'
+
+        return 'cleaning_calibrating'
+
+# State 2 - Cleaning and Calibrating
+class state2(smach.State):
+
+    def __init__(self, utils):
+        smach.State.__init__(self,
+                            outcomes = ['insertion','replace','restart'],
+                            input_keys = ['state_2_ip'])
+        
+        self.utils = utils
 
     def execute(self, userdata):
-        if VERBOSE: rospy.loginfo("State: InsertSensor")
+        try:
+            manipulator = self.utils
+            manipulator.manipulation()
+            # Move xArm to Home position
+            HomeOutput = manipulator.GoHomeService()
+            HomeFlag = HomeOutput.success
 
-        global visited_stalks, insertion_angle
-        global GoHomeService, HookCornService, UnhookCornService
+            # If error in moving to xArm, restart FSM
+            if (HomeFlag == "ERROR"):
+                print("Error in HomeFlag")
+                return 'restart'
+            
+        except rospy.ServiceException as exc:
+            rospy.loginfo('Service did not process request: ' + str(exc))
+            return 'restart'
 
-        # Hook the selected cornstalk at the best angle
-        current_stalk = Point(x = visited_stalks[-1][0],
-                              y = visited_stalks[-1][1],
-                              z = visited_stalks[-1][2])
-        resp = HookCornService(grasp_point=current_stalk, insert_angle=insertion_angle)
+        return 'insertion'
 
-        # Extend actuator
-        # Get data
-        # Retract actuator
+# State 3: Insertion
+class state3(smach.State):
 
-        # Unhook
-        resp = UnhookCornService()
+    def __init__(self, utils):
+        smach.State.__init__(self,
+                            outcomes = ['replace','restart'],
+                            input_keys = ['state_3_ip'])
+        self.utils = utils
 
-        # Move xArm to cleaning pump
-        resp = GoEMService(id="clean")
-        # actuate clean
+    def execute(self, userdata):
 
-        # Return the xArm to home
-        resp = GoHomeService()
+        try:
+            manipulator = self.utils
+            manipulator.manipulation()
+            # Move xArm to Home position
+            HomeOutput = manipulator.GoHomeService()
+            HomeFlag = HomeOutput.success
 
-        return 'done'
+            # If error in moving to xArm, restart FSM
+            if (HomeFlag == "ERROR"):
+                print("Error in HomeFlag")
+                return 'restart'
 
-# TODO: Set timeouts for services and errors if not found
-def loadServices():
+            current_stalk = Point(x = self.utils.near_cs[-1][0],
+                                  y = self.utils.near_cs[-1][1],
+                                  z = self.utils.near_cs[-1][2])
+                
+            # # Move xArm to that CornStalk
+            # Go2CornOutput = manipulator.GoCornService(grasp_point = current_stalk)
+            # if (Go2CornOutput.success == "ERROR"):
+            #     print("Error in Go 2 corn")
+            #     return 'restart'
+            
+            GoHook = manipulator.HookCornService(grasp_point = current_stalk, insert_angle = self.utils.insertion_ang)
+            if (GoHook.success == "ERROR"):
+                print("Error in Hook")
+                return 'restart'
+            
+            print("Extend Linear Actuator")
+            print("Get Data")
+            print("Retract Linear Actuator")
 
-    # Perception # NOTE: TEMPORARY
-    global GoHomeService, GetStalkService
-    # rospy.wait_for_service('get_stalk')
-    # GetStalkService = rospy.ServiceProxy('get_stalk', GetStalk)
-    # rospy.wait_for_service('get_width')
-    # GetWidthService = rospy.ServiceProxy('get_width', GetWidth)
+            Unhook = manipulator.UnhookCornService()
+            if (Unhook.success == "ERROR"):
+                print("Error in Unhooking")
+                return 'restart'
+            
+        except rospy.ServiceException as exc:
+            rospy.loginfo('Service did not process request: ' + str(exc))
+            return 'restart'
 
-    # Manipulation
-    global GoCornService, ArcCornService, GetWidthService, GoEMService, HookCornService, UnhookCornService
-    rospy.wait_for_service('GoHome')
-    GoHomeService = rospy.ServiceProxy('GoHome', GoHome)
-    rospy.wait_for_service('GoCorn')
-    GoCornService = rospy.ServiceProxy('GoCorn', GoCorn)
-    rospy.wait_for_service('ArcCorn')
-    ArcCornService = rospy.ServiceProxy('ArcCorn', ArcCorn)
-    rospy.wait_for_service('GoEM')
-    GoEMService = rospy.ServiceProxy('GoEM', GoEM)
-    rospy.wait_for_service('HookCorn')
-    HookCornService = rospy.ServiceProxy('HookCorn', HookCorn)
-    rospy.wait_for_service('UnhookCorn')
-    UnhookCornService = rospy.ServiceProxy('UnhookCorn', UnhookCorn)
+        return 'replace'
 
-if __name__ == "__main__":
-    rospy.init_node('nimo_state_machine')
+# State 4: Replace
+class state4(smach.State):
 
-    if VERBOSE: rospy.loginfo("Starting FSM node.")
+    def __init__(self, utils):
+        smach.State.__init__(self,
+                            outcomes = ['replace_stop'],
+                            input_keys = ['state_4_ip'])
+    
+    def execute(self, userdata):
+        # rospy.loginfo('Running State 4')
+        # flag = m_3(self, userdata.state4_ip)
+        # print("Output from EM method: %s", flag)
 
-    loadServices()
+        return 'replace_stop'
+    
+class state5(smach.State):
 
-    global visited_stalks, insertion_angle
-    visited_stalks = []
-    insertion_angle = 0
+    def __init__(self,utils):
+        smach.State.__init__(self,
+                             outcomes = ['error'])
+        
+    def execute(self):
+        return 'error'
 
-    sm = smach.StateMachine(outcomes=['next_waypoint', 'error', 'replace_sensor']) # Terminal states for SVD
-    # sm = smach.StateMachine(outcomes=['ERROR']) # Terminal states for Iowa
+class FSM:
 
-    with sm:
-        smach.StateMachine.add('FIND_STALK', FindStalk(), 
-                               transitions={'error':'error',
-                                            'next_waypoint':'next_waypoint',
-                                            'done':'CLEAN_CALIBRATE'})
-        smach.StateMachine.add('CLEAN_CALIBRATE', CleanCalibrate(), 
-                               transitions={'error':'error',
-                                            'replace_sensor':'replace_sensor',
-                                            'done':'Insert_Sensor'})
-        smach.StateMachine.add('Insert_Sensor', InsertSensor(), 
-                               transitions={'error':'error',
-                                            'replace_sensor':'replace_sensor',
-                                            'done':'FIND_STALK'}) # NOTE: Should we check all visible stalks, or just move on?
+    def __init__(self):
+        rospy.init_node('nimo_state_machine')
+        self.utils = Utils()
+        self.main()
 
-    # Return the xArm to home
-    global GoHomeService
-    resp = GoHomeService()
+    def main(self):
 
-    outcome = sm.execute()
+        start_state = smach.StateMachine(outcomes = ['stop'])    # Outcome of Main State Machine
+        start_state.userdata.find_stalk = (3, 10.0)  # a tuple of num_frames and timeout
+        start_state.userdata.gopump = "pumpsoff"
+
+        with start_state:
+
+            smach.StateMachine.add('Finding_Cornstalk',state1(self.utils),
+                                transitions = {'cleaning_calibrating':'Cleaning_Calibrating',
+                                               'restart':'Stop'},
+                                remapping = {'state_1_input':'find_stalk'})  # Go to State B
+            
+            smach.StateMachine.add('Cleaning_Calibrating',state2(self.utils),
+                                transitions = {'insertion':'Insertion','replace':'stop', 'restart':'Stop'},
+                                remapping = {'c_c_ip':'flag_b'})  # Go to State B
+            
+            smach.StateMachine.add('Insertion',state3(self.utils),
+                                transitions = {'replace':'Replace', 'restart':'Stop'},
+                                remapping = {'state_3_ip':'gopump'})  # Go to State C
+            
+            smach.StateMachine.add('Replace',state4(self.utils),
+                                transitions = {'replace_stop':'stop'},    # should be 'stop' instead of 'Finding_Cornstalk'
+                                remapping = {'state_4_ip':'gopump'})  # Go to State B
+            
+            smach.StateMachine.add('Stop',state5(self.utils),
+                                transitions = {'error':'stop'})   # incase of any ERROR, restart from the beginning
+        
+        sis = smach_ros.IntrospectionServer('server_name', start_state, '/NiMo_SM')
+        sis.start()
+
+        outcome = start_state.execute()
+
+        rospy.spin()
+        sis.stop()
+
+if __name__ == '__main__':
+    fsm = FSM()
