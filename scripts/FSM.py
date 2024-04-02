@@ -16,11 +16,10 @@ import smach
 import smach_ros
 
 # Perception
-from stalk_detect.srv import GetStalk
-from stalk_detect.srv import GetWidth
+from stalk_detect.srv import *
 
 # External Mechanisms
-# from act_pump.srv import service1
+from act_pump.srv import *
 
 # Manipulation
 from nimo_manipulation.srv import *
@@ -38,10 +37,6 @@ class Utils:
         self.near_cs = []
         self.threshold = 0.1
         self.insertion_ang = None
-
-        # self.GoHomeService = None
-        # self.GoCornService = None
-        # self.ArcCornService = None
 
     # GetStalk is the .srv file
     # get_stalk: name of the service being called
@@ -102,25 +97,6 @@ class Utils:
 
         return "REPOSITION"
     
-    # def get_width (self, num_frames, timeout):
-    #     rospy.loginfo('Doing Width Detection')
-    #     rospy.wait_for_service('get_width')
-    #     stalk_width = rospy.ServiceProxy('get_width', GetWidth)
-    #     try:
-    #         output_2 = stalk_width(num_frames=num_frames, timeout=timeout)
-    #         width = output_2.width
-    #         flag = output_2.success
-
-    #         if (flag == "DONE"):
-    #             return width
-
-    #         rospy.loginfo('width: %f', width)
-    #     except rospy.ServiceException as exc:
-    #         rospy.loginfo('Service did not process request: ' + str(exc))
-    #         return "ERROR"
-        
-    #     return "REPOSITION"
-    
     def services(self):
         rospy.wait_for_service('get_width')
         self.GetWidthService = rospy.ServiceProxy('get_width', GetWidth)
@@ -134,6 +110,8 @@ class Utils:
         self.HookCornService = rospy.ServiceProxy('HookCorn', HookCorn)
         rospy.wait_for_service('UnhookCorn')
         self.UnhookCornService = rospy.ServiceProxy('UnhookCorn', UnhookCorn)
+        rospy.wait_for_service('GoEM')
+        self.GoEMService = rospy.ServiceProxy('GoEM', GoEM)
         rospy.wait_for_service('get_dat')
         self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
         rospy.wait_for_service('act_linear')
@@ -144,6 +122,8 @@ class Utils:
         self.ActLinearService = rospy.ServiceProxy('act_linear', act_linear)
         rospy.wait_for_service('get_dat')
         self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
+        rospy.wait_for_service('control_pumps')
+        self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
 
 # State 1 - Finding Cornstalk
 class state1(smach.State):
@@ -248,22 +228,57 @@ class state2(smach.State):
                 print("Cannot move arm to home position")
                 return 'restart'
             
-            print('Go to EM: clean')
-            print('act pump: clean')
-            print('Go to EM: calib_low')
-            print('act pump: calib_low')
+            # Go to EM: clean
+            GoEMOutput = service_.GoEMService("clean")
+            if (GoEMOutput.success == "DONE"):
+                # act pump: clean
+                
+                ControlPumpsOutput = service_.ControlPumpsService("pump1")
+                if (ControlPumpsOutput.success == True):
+                    time.sleep(15)   # delay of 15 seconds - do it in a better way
+                    ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
+                
+            # Go to EM: calib_low
+            if (ControlPumpsOutput.success == True):
+                GoEMOutput = service_.GoEMService("cal_low")
             
-            CalDatOutput = service_.GetCalDatService("cal_low")
-            print(f"Output from data logger: {CalDatOutput.flag}")
+            if (GoEMOutput.success == "DONE"):
+                # act pump: calib_low
+                
+                ControlPumpsOutput = service_.ControlPumpsService("pump2")
+                if (ControlPumpsOutput.success == True):
 
-            print('Go to EM: calib_high')
-            print('act pump: calib_high')
+                    # Get Cal data
+                    CalDatOutput = service_.GetCalDatService("cal_low")
+                    time.sleep(15)   # delay of 15 seconds - do it in a better way
+                    ControlPumpsOutput = service_.ControlPumpsService("pumpsoff") 
 
-            CalDatOutput1 = service_.GetCalDatService("cal_high")
-            print(f"Output from data logger: {CalDatOutput1.flag}")
+            # Go to EM: calib_high
+            if (ControlPumpsOutput.success == True):
+                GoEMOutput = service_.GoEMService("cal_high")
 
-            print('Go to EM: clean')
-            print('act pump: clean')
+            if (GoEMOutput.success == "DONE"):
+                # act pump: calib_high
+                
+                ControlPumpsOutput = service_.ControlPumpsService("pump3")
+                if (ControlPumpsOutput.success == True):
+
+                    # Get Cal data
+                    CalDatOutput1 = service_.GetCalDatService("cal_high")
+                    time.sleep(15)   # delay of 15 seconds - do it in a better way
+                    ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
+
+            # Go to EM: clean
+            if (ControlPumpsOutput.success == True):
+                GoEMOutput = service_.GoEMService("clean")
+
+            if (GoEMOutput.success == "DONE"):
+                # act pump: clean
+                
+                ControlPumpsOutput = service_.ControlPumpsService("pump1")
+                if (ControlPumpsOutput.success == True):
+                    time.sleep(15)   # delay of 15 seconds - do it in a better way
+                    ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
 
             if (CalDatOutput1.flag == "ERROR"):
                 return 'replace'
@@ -301,12 +316,6 @@ class state3(smach.State):
             current_stalk = Point(x = self.utils.near_cs[-1][0],
                                   y = self.utils.near_cs[-1][1],
                                   z = self.utils.near_cs[-1][2])
-                
-            # # Move xArm to that CornStalk
-            # Go2CornOutput = manipulator.GoCornService(grasp_point = current_stalk)
-            # if (Go2CornOutput.success == "ERROR"):
-            #     print("Error in Go 2 corn")
-            #     return 'restart'
             
             GoHook = service_.HookCornService(grasp_point = current_stalk, insert_angle = self.utils.insertion_ang)
             if (GoHook.success == "ERROR"):
