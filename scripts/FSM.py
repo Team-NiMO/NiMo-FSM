@@ -112,16 +112,14 @@ class Utils:
         self.UnhookCornService = rospy.ServiceProxy('UnhookCorn', UnhookCorn)
         rospy.wait_for_service('GoEM')
         self.GoEMService = rospy.ServiceProxy('GoEM', GoEM)
-        rospy.wait_for_service('get_dat')
-        self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
+        rospy.wait_for_service('UngoCorn')
+        self.UngoCornService = rospy.ServiceProxy('UngoCorn', UngoCorn)
+        # rospy.wait_for_service('get_cal_dat')
+        # self.GetCalDatService = rospy.ServiceProxy('get_cal_dat', get_cal_dat)
         rospy.wait_for_service('act_linear')
         self.ActLinearService = rospy.ServiceProxy('act_linear', act_linear)
-        rospy.wait_for_service('get_cal_dat')
-        self.GetCalDatService = rospy.ServiceProxy('get_cal_dat', get_cal_dat)
-        rospy.wait_for_service('act_linear')
-        self.ActLinearService = rospy.ServiceProxy('act_linear', act_linear)
-        rospy.wait_for_service('get_dat')
-        self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
+        # rospy.wait_for_service('get_dat')
+        # self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
         rospy.wait_for_service('control_pumps')
         self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
 
@@ -196,6 +194,15 @@ class state1(smach.State):
             max_pair = max(width_ang, key = lambda x:x[0])
             self.utils.insertion_ang = max_pair[1]
 
+            ArcMoveOutput = service_.ArcCornService(relative_angle=0)
+            if (ArcMoveOutput.success == "ERROR"):
+                print("Cannot perform Arc Movement")
+                return 'restart'
+            
+            UngoCornOutput = service_.UngoConrnService()
+            if (UngoCornOutput.success == "ERROR"):
+                return 'restart'
+
             print(f"Width Angle list is: {width_ang}")
             print(f"Insertion angle is: {self.utils.insertion_ang}")
 
@@ -226,6 +233,11 @@ class state2(smach.State):
             # If error in moving to xArm, restart FSM
             if (HomeOutput.success == "ERROR"):
                 print("Cannot move arm to home position")
+                return 'restart'
+            
+            # Bring out the Nitrate sensor
+            ActLinearOutput = service_.ActLinearService("extend")
+            if (ActLinearOutput.success == "ERROR"):
                 return 'restart'
             
             # Go to EM: clean
@@ -283,6 +295,11 @@ class state2(smach.State):
             if (CalDatOutput1.flag == "ERROR"):
                 return 'replace'
             
+            # Put the Nitrate Sensor back in
+            ActLinearOutput1 = service_.ActLinearService("retract")
+            if (ActLinearOutput1.success == "ERROR"):
+                return 'restart'
+            
         except rospy.ServiceException as exc:
             rospy.loginfo('Service did not process request: ' + str(exc))
             return 'restart'
@@ -322,21 +339,26 @@ class state3(smach.State):
                 print("Error in Hooking")
                 return 'restart'
             
-            ActLinearOutput = service_.ActLinearService("extend")
-            if (ActLinearOutput.flag == "SUCCESS"):
-                GetDatOutput = service_.GetDatService()
+            Unhook = service_.UnhookCornService()
+            if (Unhook.success == "ERROR"):
+                print("Error in Unhooking")
+                return 'restart'
             
-            ActLinearOutput1 = service_.ActLinearService("retract")
-            if (ActLinearOutput1.flag == "SUCCESS"):
-                print("unhooking")
-                Unhook = service_.UnhookCornService()
-                if (Unhook.success == "ERROR"):
-                    print("Error in Unhooking")
-                    return 'restart'
+            # ActLinearOutput = service_.ActLinearService("extend")
+            # if (ActLinearOutput.flag == "SUCCESS"):
+            #     GetDatOutput = service_.GetDatService()
+            
+            # ActLinearOutput1 = service_.ActLinearService("retract")
+            # if (ActLinearOutput1.flag == "SUCCESS"):
+            #     print("unhooking")
+            #     Unhook = service_.UnhookCornService()
+            #     if (Unhook.success == "ERROR"):
+            #         print("Error in Unhooking")
+            #         return 'restart'
                 
-            if (GetDatOutput.flag == "ERROR"):
-                print("Replace Sensor")
-                return 'replace'
+            # if (GetDatOutput.flag == "ERROR"):
+            #     print("Replace Sensor")
+            #     return 'replace'
             
         except rospy.ServiceException as exc:
             rospy.loginfo('Service did not process request: ' + str(exc))
