@@ -114,14 +114,18 @@ class Utils:
         self.GoEMService = rospy.ServiceProxy('GoEM', GoEM)
         rospy.wait_for_service('UngoCorn')
         self.UngoCornService = rospy.ServiceProxy('UngoCorn', UngoCorn)
-        # rospy.wait_for_service('get_cal_dat')
-        # self.GetCalDatService = rospy.ServiceProxy('get_cal_dat', get_cal_dat)
+        rospy.wait_for_service('get_cal_dat')
+        self.GetCalDatService = rospy.ServiceProxy('get_cal_dat', get_cal_dat)
         rospy.wait_for_service('act_linear')
         self.ActLinearService = rospy.ServiceProxy('act_linear', act_linear)
-        # rospy.wait_for_service('get_dat')
-        # self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
+        rospy.wait_for_service('get_dat')
+        self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
         rospy.wait_for_service('control_pumps')
         self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
+
+    def callback(self,idk):
+        ControlPumpsOutput = self.ControlPumpsService("pumpsoff")
+        print('pumps off')
 
 # State 1 - Finding Cornstalk
 class state1(smach.State):
@@ -194,12 +198,12 @@ class state1(smach.State):
             max_pair = max(width_ang, key = lambda x:x[0])
             self.utils.insertion_ang = max_pair[1]
 
-            ArcMoveOutput = service_.ArcCornService(relative_angle=0)
+            ArcMoveOutput = service_.ArcCornService(relative_angle=-30)
             if (ArcMoveOutput.success == "ERROR"):
                 print("Cannot perform Arc Movement")
                 return 'restart'
             
-            UngoCornOutput = service_.UngoConrnService()
+            UngoCornOutput = service_.UngoCornService()
             if (UngoCornOutput.success == "ERROR"):
                 return 'restart'
 
@@ -237,18 +241,20 @@ class state2(smach.State):
             
             # Bring out the Nitrate sensor
             ActLinearOutput = service_.ActLinearService("extend")
-            if (ActLinearOutput.success == "ERROR"):
+            if (ActLinearOutput.flag == "ERROR"):
                 return 'restart'
             
             # Go to EM: clean
             GoEMOutput = service_.GoEMService("clean")
             if (GoEMOutput.success == "DONE"):
                 # act pump: clean
-                
+                time.sleep(30)
+                print('clean pump')
                 ControlPumpsOutput = service_.ControlPumpsService("pump1")
                 if (ControlPumpsOutput.success == True):
-                    time.sleep(15)   # delay of 15 seconds - do it in a better way
-                    ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
+                    rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
+                    time.sleep(180)   # delay of 15 seconds - do it in a better way
+                    # ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
                 
             # Go to EM: calib_low
             if (ControlPumpsOutput.success == True):
@@ -256,14 +262,19 @@ class state2(smach.State):
             
             if (GoEMOutput.success == "DONE"):
                 # act pump: calib_low
-                
+                time.sleep(30)
+                print('cal low pump')
                 ControlPumpsOutput = service_.ControlPumpsService("pump2")
                 if (ControlPumpsOutput.success == True):
 
                     # Get Cal data
+                    rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
                     CalDatOutput = service_.GetCalDatService("cal_low")
-                    time.sleep(15)   # delay of 15 seconds - do it in a better way
-                    ControlPumpsOutput = service_.ControlPumpsService("pumpsoff") 
+                    # time.sleep(15)   # delay of 15 seconds - do it in a better way
+                    # ControlPumpsOutput = service_.ControlPumpsService("pumpsoff") 
+
+                # rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
+                # CalDatOutput = service_.GetCalDatService("cal_low")
 
             # Go to EM: calib_high
             if (ControlPumpsOutput.success == True):
@@ -271,33 +282,41 @@ class state2(smach.State):
 
             if (GoEMOutput.success == "DONE"):
                 # act pump: calib_high
-                
+                time.sleep(30)
+                print('cal high pump')
                 ControlPumpsOutput = service_.ControlPumpsService("pump3")
                 if (ControlPumpsOutput.success == True):
 
                     # Get Cal data
+                    rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
                     CalDatOutput1 = service_.GetCalDatService("cal_high")
-                    time.sleep(15)   # delay of 15 seconds - do it in a better way
-                    ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
+                    # time.sleep(15)   # delay of 15 seconds - do it in a better way
+                    # ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
+
+                # rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
+                # CalDatOutput1 = service_.GetCalDatService("cal_high")
 
             # Go to EM: clean
             if (ControlPumpsOutput.success == True):
                 GoEMOutput = service_.GoEMService("clean")
+            # GoEMOutput = service_.GoEMService("clean")
 
             if (GoEMOutput.success == "DONE"):
                 # act pump: clean
-                
+                time.sleep(30)
+                print('clean pump')
                 ControlPumpsOutput = service_.ControlPumpsService("pump1")
                 if (ControlPumpsOutput.success == True):
-                    time.sleep(15)   # delay of 15 seconds - do it in a better way
-                    ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
+                    rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
+                    time.sleep(180)   # delay of 15 seconds - do it in a better way
+                    # ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
 
             if (CalDatOutput1.flag == "ERROR"):
                 return 'replace'
             
             # Put the Nitrate Sensor back in
             ActLinearOutput1 = service_.ActLinearService("retract")
-            if (ActLinearOutput1.success == "ERROR"):
+            if (ActLinearOutput1.flag == "ERROR"):
                 return 'restart'
             
         except rospy.ServiceException as exc:
