@@ -46,8 +46,8 @@ class Utils:
     def get_grasp (self, num_frames, timeout):
 
         rospy.loginfo('Finding nearest Cornstalk')
-        rospy.wait_for_service('get_stalk')
-        stalk = rospy.ServiceProxy('get_stalk', GetStalk)
+        rospy.wait_for_service('GetStalks')
+        stalk = rospy.ServiceProxy('GetStalks', GetStalk)
 
         try:
         
@@ -98,8 +98,9 @@ class Utils:
         return "REPOSITION"
     
     def services(self):
-        rospy.wait_for_service('get_width')
-        self.GetWidthService = rospy.ServiceProxy('get_width', GetWidth)
+        rospy.loginfo("Waiting for services...")
+        rospy.wait_for_service('GetWidth')
+        self.GetWidthService = rospy.ServiceProxy('GetWidth', GetWidth)
         rospy.wait_for_service('GoHome')
         self.GoHomeService = rospy.ServiceProxy('GoHome', GoHome)
         rospy.wait_for_service('GoCorn')
@@ -122,6 +123,7 @@ class Utils:
         self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
         rospy.wait_for_service('control_pumps')
         self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
+        rospy.loginfo("Done")
 
     def callback(self,idk):
         ControlPumpsOutput = self.ControlPumpsService("pumpsoff")
@@ -138,7 +140,6 @@ class state1(smach.State):
         self.width_ang = []
         
     def execute(self, userdata):
-        
         try:
             
             service_ = self.utils
@@ -198,6 +199,8 @@ class state1(smach.State):
             max_pair = max(width_ang, key = lambda x:x[0])
             self.utils.insertion_ang = max_pair[1]
 
+            rospy.logwarn(width_ang)
+
             ArcMoveOutput = service_.ArcCornService(relative_angle=-30)
             if (ArcMoveOutput.success == "ERROR"):
                 print("Cannot perform Arc Movement")
@@ -248,12 +251,12 @@ class state2(smach.State):
             GoEMOutput = service_.GoEMService("clean")
             if (GoEMOutput.success == "DONE"):
                 # act pump: clean
-                time.sleep(30)
+                # time.sleep(15)
                 print('clean pump')
                 ControlPumpsOutput = service_.ControlPumpsService("pump1")
                 if (ControlPumpsOutput.success == True):
                     rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
-                    time.sleep(180)   # delay of 15 seconds - do it in a better way
+                    time.sleep(15)   # delay of 15 seconds - do it in a better way
                     # ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
                 
             # Go to EM: calib_low
@@ -262,7 +265,7 @@ class state2(smach.State):
             
             if (GoEMOutput.success == "DONE"):
                 # act pump: calib_low
-                time.sleep(30)
+                # time.sleep(15)
                 print('cal low pump')
                 ControlPumpsOutput = service_.ControlPumpsService("pump2")
                 if (ControlPumpsOutput.success == True):
@@ -270,11 +273,7 @@ class state2(smach.State):
                     # Get Cal data
                     rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
                     CalDatOutput = service_.GetCalDatService("cal_low")
-                    # time.sleep(15)   # delay of 15 seconds - do it in a better way
-                    # ControlPumpsOutput = service_.ControlPumpsService("pumpsoff") 
-
-                # rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
-                # CalDatOutput = service_.GetCalDatService("cal_low")
+                    time.sleep(15)   # delay of 15 seconds - do it in a better way
 
             # Go to EM: calib_high
             if (ControlPumpsOutput.success == True):
@@ -282,7 +281,7 @@ class state2(smach.State):
 
             if (GoEMOutput.success == "DONE"):
                 # act pump: calib_high
-                time.sleep(30)
+                # time.sleep(15)
                 print('cal high pump')
                 ControlPumpsOutput = service_.ControlPumpsService("pump3")
                 if (ControlPumpsOutput.success == True):
@@ -290,12 +289,8 @@ class state2(smach.State):
                     # Get Cal data
                     rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
                     CalDatOutput1 = service_.GetCalDatService("cal_high")
-                    # time.sleep(15)   # delay of 15 seconds - do it in a better way
-                    # ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
-
-                # rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
-                # CalDatOutput1 = service_.GetCalDatService("cal_high")
-
+                    time.sleep(15)   # delay of 15 seconds - do it in a better way
+                    
             # Go to EM: clean
             if (ControlPumpsOutput.success == True):
                 GoEMOutput = service_.GoEMService("clean")
@@ -303,14 +298,13 @@ class state2(smach.State):
 
             if (GoEMOutput.success == "DONE"):
                 # act pump: clean
-                time.sleep(30)
+                # time.sleep(15)
                 print('clean pump')
                 ControlPumpsOutput = service_.ControlPumpsService("pump1")
                 if (ControlPumpsOutput.success == True):
                     rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
-                    time.sleep(180)   # delay of 15 seconds - do it in a better way
-                    # ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
-
+                    time.sleep(15)   # delay of 15 seconds - do it in a better way
+                    
             if (CalDatOutput1.flag == "ERROR"):
                 return 'replace'
             
@@ -358,26 +352,24 @@ class state3(smach.State):
                 print("Error in Hooking")
                 return 'restart'
             
-            Unhook = service_.UnhookCornService()
-            if (Unhook.success == "ERROR"):
-                print("Error in Unhooking")
-                return 'restart'
+            ActLinearOutput = service_.ActLinearService("extend")
+            if (ActLinearOutput.flag == "SUCCESS"):
+                GetDatOutput = service_.GetDatService()
             
-            # ActLinearOutput = service_.ActLinearService("extend")
-            # if (ActLinearOutput.flag == "SUCCESS"):
-            #     GetDatOutput = service_.GetDatService()
+            rospy.logwarn(GetDatOutput.nitrate_val)
+
+            ActLinearOutput1 = service_.ActLinearService("retract")
+            if (ActLinearOutput1.flag == "SUCCESS"):
+                Unhook = service_.UnhookCornService()
+                if (Unhook.success == "ERROR"):
+                    print("Error in Unhooking")
+                    return 'restart'
+
+            if (GetDatOutput.flag == "ERROR"):
+                print("Replace Sensor")
+                return 'replace'
             
-            # ActLinearOutput1 = service_.ActLinearService("retract")
-            # if (ActLinearOutput1.flag == "SUCCESS"):
-            #     print("unhooking")
-            #     Unhook = service_.UnhookCornService()
-            #     if (Unhook.success == "ERROR"):
-            #         print("Error in Unhooking")
-            #         return 'restart'
-                
-            # if (GetDatOutput.flag == "ERROR"):
-            #     print("Replace Sensor")
-            #     return 'replace'
+            return 'restart'
             
         except rospy.ServiceException as exc:
             rospy.loginfo('Service did not process request: ' + str(exc))
@@ -412,7 +404,7 @@ class FSM:
         with start_state:
 
             smach.StateMachine.add('Finding_Cornstalk',state1(self.utils),
-                                transitions = {'cleaning_calibrating':'Cleaning_Calibrating',
+                                transitions = {'cleaning_calibrating':'Cleaning_Calibrating', # NOTE: TEMPORARY CHANGE BACK
                                                'restart':'stop',
                                                'find_cornstalk':'Finding_Cornstalk'},
                                 remapping = {'state_1_input':'find_stalk'})  # Go to State B
@@ -421,7 +413,7 @@ class FSM:
                                 transitions = {'insertion':'Insertion','replace':'Replace', 'restart':'stop'})  # Go to State B
             
             smach.StateMachine.add('Insertion',state3(self.utils),
-                                transitions = {'replace':'Replace', 'restart':'stop'})  # Go to State C
+                                transitions = {'replace':'Replace', 'restart':'Finding_Cornstalk'})  # Go to State C
             
             smach.StateMachine.add('Replace',state4(self.utils),
                                 transitions = {'replace_stop':'stop'})  # Go to State B
