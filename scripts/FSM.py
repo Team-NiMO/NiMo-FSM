@@ -103,6 +103,8 @@ class Utils:
         self.GetWidthService = rospy.ServiceProxy('GetWidth', GetWidth)
         rospy.wait_for_service('GoHome')
         self.GoHomeService = rospy.ServiceProxy('GoHome', GoHome)
+        rospy.wait_for_service('LookatCorn')
+        self.LookatCornService = rospy.ServiceProxy('LookatCorn', LookatCorn)
         rospy.wait_for_service('GoCorn')
         self.GoCornService = rospy.ServiceProxy('GoCorn', GoCorn)
         rospy.wait_for_service('ArcCorn')
@@ -150,7 +152,14 @@ class state1(smach.State):
 
             # If error in moving to xArm, restart FSM
             if (HomeOutput.success == "ERROR"):
-                print("Cannot move arm to home position")
+                print("Cannot move arm to home position 1")
+                return 'restart'
+            
+            LookOutput = service_.LookatCornService()
+
+            # If error in moving to xArm, restart FSM
+            if (LookOutput.success == "ERROR"):
+                print("Cannot move arm to look at corn")
                 return 'restart'
             
             # Get Grasp Point (last point added to the near_cs list)
@@ -165,6 +174,14 @@ class state1(smach.State):
             current_stalk = Point(x = self.utils.near_cs[-1][0],
                                   y = self.utils.near_cs[-1][1],
                                   z = self.utils.near_cs[-1][2])
+            
+            # Move xArm to Home position
+            HomeOutput = service_.GoHomeService()
+            
+            # If error in moving to xArm, restart FSM
+            if (HomeOutput.success == "ERROR"):
+                print("Cannot move arm to home position 2")
+                return 'restart'
             
             # Move xArm to that CornStalk
             Go2CornOutput = service_.GoCornService(grasp_point = current_stalk)
@@ -340,7 +357,7 @@ class state3(smach.State):
 
             # If error in moving to xArm, restart FSM
             if (HomeOutput.success == "ERROR"):
-                print("Cannot move arm to home position")
+                print("Cannot move arm to home position insert")
                 return 'restart'
 
             current_stalk = Point(x = self.utils.near_cs[-1][0],
@@ -359,15 +376,15 @@ class state3(smach.State):
             rospy.logwarn(GetDatOutput.nitrate_val)
 
             ActLinearOutput1 = service_.ActLinearService("retract")
-            if (ActLinearOutput1.flag == "SUCCESS"):
-                Unhook = service_.UnhookCornService()
-                if (Unhook.success == "ERROR"):
-                    print("Error in Unhooking")
-                    return 'restart'
 
-            if (GetDatOutput.flag == "ERROR"):
-                print("Replace Sensor")
-                return 'replace'
+            Unhook = service_.UnhookCornService()
+            if (Unhook.success == "ERROR"):
+                print("Error in Unhooking")
+                return 'restart'
+
+            # if (GetDatOutput.flag == "ERROR"):
+            #     print("Replace Sensor")
+            #     return 'replace'
             
             return 'restart'
             
@@ -404,7 +421,7 @@ class FSM:
         with start_state:
 
             smach.StateMachine.add('Finding_Cornstalk',state1(self.utils),
-                                transitions = {'cleaning_calibrating':'Cleaning_Calibrating', # NOTE: TEMPORARY CHANGE BACK
+                                transitions = {'cleaning_calibrating':'Insertion', # NOTE: TEMPORARY CHANGE BACK
                                                'restart':'stop',
                                                'find_cornstalk':'Finding_Cornstalk'},
                                 remapping = {'state_1_input':'find_stalk'})  # Go to State B
