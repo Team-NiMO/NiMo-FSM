@@ -169,6 +169,15 @@ class state1(smach.State):
                 return 'restart'
             elif (grasp_flag == "REPOSITION"):
                 print("No cornstalks nearby")
+
+                # Move xArm to Home position
+                HomeOutput = service_.GoHomeService()
+
+                # If error in moving to xArm, restart FSM
+                if (HomeOutput.success == "ERROR"):
+                    print("Cannot move arm to home position 2")
+                    return 'restart'
+
                 return 'restart'
             
             current_stalk = Point(x = self.utils.near_cs[-1][0],
@@ -382,9 +391,9 @@ class state3(smach.State):
                 print("Error in Unhooking")
                 return 'restart'
 
-            # if (GetDatOutput.flag == "ERROR"):
-            #     print("Replace Sensor")
-            #     return 'replace'
+            if (GetDatOutput.flag == "ERROR"):
+                print("Replace Sensor")
+                return 'replace'
             
             return 'restart'
             
@@ -421,7 +430,7 @@ class FSM:
         with start_state:
 
             smach.StateMachine.add('Finding_Cornstalk',state1(self.utils),
-                                transitions = {'cleaning_calibrating':'Insertion', # NOTE: TEMPORARY CHANGE BACK
+                                transitions = {'cleaning_calibrating':'Cleaning_Calibrating', # NOTE: TEMPORARY CHANGE BACK
                                                'restart':'stop',
                                                'find_cornstalk':'Finding_Cornstalk'},
                                 remapping = {'state_1_input':'find_stalk'})  # Go to State B
