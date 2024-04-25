@@ -166,6 +166,7 @@ class state1(smach.State):
                 print("Cannot move arm to look at corn")
                 return 'restart'
             
+            temp = 0
             for i in [-30, 0, 30]:
                 LookatAngleOutput = service_.LookatAngleService(joint_angle=i)
                 if (LookatAngleOutput.success == "ERROR"):
@@ -177,21 +178,26 @@ class state1(smach.State):
                 if (grasp_flag == "ERROR"):
                     print("Perception Failed")
                     return 'restart'
-                # elif (grasp_flag == "REPOSITION"):
-                #     print("No cornstalks nearby")
-
-                #     # # Move xArm to Home position
-                #     # HomeOutput = service_.GoHomeService()
-
-                #     # # If error in moving to xArm, restart FSM
-                #     # if (HomeOutput.success == "ERROR"):
-                #     #     print("Cannot move arm to home position 2")
-                #     #     # return 'restart'
-                #     return 'restart'
+                
+                if (grasp_flag) == "SUCCESS":
+                    break
+                if (grasp_flag) == "REPOSITION":
+                    temp += 1
             
+            if (temp == 3):
+                    print("No cornstalks nearby") 
+                    # Move xArm to Home position
+                    HomeOutput = service_.GoHomeService()
+
+                    # If error in moving to xArm, restart FSM
+                    if (HomeOutput.success == "ERROR"):
+                        print("Cannot move arm to home position 2")
+                        # return 'restart'
+                    return 'restart'
+
             current_stalk = Point(x = self.utils.near_cs[-1][0],
-                                  y = self.utils.near_cs[-1][1],
-                                  z = self.utils.near_cs[-1][2])
+                                y = self.utils.near_cs[-1][1],
+                                z = self.utils.near_cs[-1][2])
             
             # Move xArm to Home position
             HomeOutput = service_.GoHomeService()
