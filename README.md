@@ -4,30 +4,30 @@ This node handles the transition between different states based on the functiona
 ## Overview
 [LINKS TO MANIUPLATION, PERCEPTION, EXTERNAL MECHANISMS, END EFFECTOR]
 Fig 1. FUNCTIONAL ARCHITECTURE
-<img src="https://github.com/Team-NiMO/NiMo-FSM/docs/FSM.png" width="650">
+<img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/FSM.png" width="650">
 
 Fig 1. SERVICE CALLS
-<img src="https://github.com/Team-NiMO/NiMo-FSM/docs/fsm.drawio.png" width="650">
+<img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/fsm.drawio.png" width="650">
 
 ## Installation
-'''
+```
 git clone git@github.com:Team-NiMO/NiMo-FSM.git
 git pull
-'''
+```
 - python version >= 3
 - install SMACH -
-'''
+```
 sudo apt-get install ros-noetic-smach-ros
-'''
+```
 
 [ROS PACKAGES?]
 [SETUP FOR TERMINATOR LAUNCH]git@github.com:Team-NiMO/NiMo-FSM.git
 
 ## Launching FSM
-'''
+```
 cd nimo_ws
 rosrun NiMo-FSM FSM.py
-'''
+```
 
 [LAUNCHING EVERYTHING W/ TERMINATOR]
 [LAUNCHING EVERYTHING W/O TERMINATOR]
