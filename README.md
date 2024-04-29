@@ -4,9 +4,11 @@ This node handles the transition between different states based on the functiona
 ## Overview
 [LINKS TO MANIUPLATION, PERCEPTION, EXTERNAL MECHANISMS, END EFFECTOR]
 Fig 1. FUNCTIONAL ARCHITECTURE
+
 <img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/FSM.png" width="650">
 
 Fig 1. SERVICE CALLS
+
 <img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/fsm.drawio.png" width="650">
 
 ## Installation
