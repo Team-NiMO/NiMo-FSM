@@ -1,5 +1,5 @@
 # NiMo-FSM
-[QUICK DESCRIPTION]
+This node handles the transition between different states based on the functional architecture which we have defined for our system [Fig. FA]. Services are defined for each functionality for the respective nodes and the FSM script calls each service based on the system transition. [Fig. FSM]
 
 ## Overview
 [LINKS TO MANIUPLATION, PERCEPTION, EXTERNAL MECHANISMS, END EFFECTOR]
@@ -8,12 +8,14 @@
 
 ## Installation
 [CLONING]
-[PYTHON REQUIREMENTS?]
+- python version >= 3
+- install SMACH - sudo apt-get install ros-noetic-smach-ros 
+
 [ROS PACKAGES?]
 [SETUP FOR TERMINATOR LAUNCH]
 
-## Use
-[LAUNCHING FSM]
+## Launching FSM
+rosrun NiMo-FSM FSM.py
 
 [LAUNCHING EVERYTHING W/ TERMINATOR]
 [LAUNCHING EVERYTHING W/O TERMINATOR]
@@ -28,8 +30,11 @@
 [???]
 
 ## Common Issues
-[TERMINATOR BEING WEIRD]
-[WAITING ON SERVICE CALLS]
+1. If the terminator is not killed properly, i.e. if all the nodes are not killed properly, then there might be arduino port issues. The possible solutions are - 
+a. Checking the port number assigned and then modifying actp.py script for arduino uno and nitrate_sample.py for bluefruit nano
+NOTE: Restarting the amiga system will reassign the previous port numbers, so always check the port numbers before starting the FSM
+
+2. Since Service calls are blockers, FSM wont start unless all the nodes are launched, because it will wait for all the services to start. So always launch all the nodes before starting the FSM.
 
 ## Acknowledgements
 FILES TO INCLUDE: Terminator config, RViz file
