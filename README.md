@@ -1,13 +1,16 @@
 # NiMo-FSM
-This node handles the transition between different states based on the functional architecture which we have defined for our system [Fig. FA]. Services are defined for each functionality for the respective nodes and the FSM script calls each service based on the system transition. [Fig. FSM]
+This node handles the transition between different states based on the functional architecture which we have defined for our system [Fig 1]. Services are defined for each functionality for the respective nodes and the FSM script calls each service based on the system transition. [Fig 2]
 
 ## Overview
-[LINKS TO MANIUPLATION, PERCEPTION, EXTERNAL MECHANISMS, END EFFECTOR]
+Following are the github repo links to each sub-system -
+
+[Perception](https://github.com/Team-NiMO/NiMo-Perception_v2), [Manipulation](https://github.com/Team-NiMO/NiMo-Manipulation), [End-Effector](https://github.com/Team-NiMO/NiMo-EndEffector), [External Mechanisms](https://github.com/Team-NiMO/NiMo-ExternalMechanisms)
+
 Fig 1. FUNCTIONAL ARCHITECTURE
 
 <img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/FSM.png" width="650">
 
-Fig 1. SERVICE CALLS
+Fig 2. SERVICE CALLS
 
 <img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/fsm.drawio.png" width="650">
 
@@ -21,18 +24,27 @@ git pull
 ```
 sudo apt-get install ros-noetic-smach-ros
 ```
-
-[ROS PACKAGES?]
-[SETUP FOR TERMINATOR LAUNCH]git@github.com:Team-NiMO/NiMo-FSM.git
+[SETUP FOR TERMINATOR LAUNCH]
 
 ## Launching FSM
 ```
-cd nimo_ws
+cd nimo_ws/src
+git clone git@github.com:Team-NiMO/NiMo-FSM.git
 rosrun NiMo-FSM FSM.py
 ```
 
-[LAUNCHING EVERYTHING W/ TERMINATOR]
-[LAUNCHING EVERYTHING W/O TERMINATOR]
+####LAUNCHING EVERYTHING W/ TERMINATOR
+
+
+####LAUNCHING EVERYTHING W/O TERMINATOR
+```
+roslaunch nimo_perception StalkDetect.launch
+roslaunch nimo_manipulation nimo_manipulation.launch
+roslaunch nimo_end_effector nimo_end_effector.launch
+cd nimo_ws
+rosrun act_pump actp.py
+rosrun NiMo-FSM FSM.py
+```
 
 ## Visualization
 [EXPLANATION OF EVERYTHING]
