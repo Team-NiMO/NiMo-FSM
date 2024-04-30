@@ -28,7 +28,9 @@ from nimo_manipulation.srv import *
 from nimo_end_effector.srv import *
 
 """
-UPDATE Readme - asap
+navigation paramters:
+move - calls the navigation node by passing 'move'  parameter
+dont_move - this is the default parameter
 """
 class Utils:
 
@@ -146,6 +148,7 @@ class state1(smach.State):
             
             service_ = self.utils
             service_.services()
+            navigation = rospy.get_param('/navigation_param', 'dont_move')  # dont_move: this is the default value which will not let the robot move incase navigation parameter is not found
 
             # Move xArm to Home position
             HomeOutput = service_.GoHomeService()
@@ -155,7 +158,8 @@ class state1(smach.State):
                 print("Cannot move arm to home position 1")
                 return 'restart'
             
-            LookOutput = service_.LookatCornService()
+            if (navigation == "dont_move"):     # only start if amiga is not moving
+                LookOutput = service_.LookatCornService()
 
             # If error in moving to xArm, restart FSM
             if (LookOutput.success == "ERROR"):
@@ -168,7 +172,7 @@ class state1(smach.State):
                 print("Perception Failed")
                 return 'restart'
             elif (grasp_flag == "REPOSITION"):
-                print("No cornstalks nearby")
+                print("No cornstalks nearby, call navigation")
 
                 # Move xArm to Home position
                 HomeOutput = service_.GoHomeService()
@@ -178,7 +182,7 @@ class state1(smach.State):
                     print("Cannot move arm to home position 2")
                     return 'restart'
 
-                return 'restart'
+                return 'navigate'
             
             current_stalk = Point(x = self.utils.near_cs[-1][0],
                                   y = self.utils.near_cs[-1][1],
@@ -209,7 +213,7 @@ class state1(smach.State):
             GetWidthOutput = service_.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
             if (GetWidthOutput.success == "REPOSITION"):
                 print("Cannot find cornstalks with suitable width")
-                return 'find_cornstalk'
+                return 'navigate'
             # width = self.utils.get_width(userdata.state_1_input[0], userdata.state_1_input[1])
             width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
 
@@ -403,7 +407,7 @@ class state3(smach.State):
 
         return 'restart'
 
-# State 4: Replace/Stop
+# State 4: Replace
 class state4(smach.State):
 
     def __init__(self, utils):
@@ -414,6 +418,19 @@ class state4(smach.State):
 
 
         return 'replace_stop'
+    
+# State 5: Navigate
+class state5(smach.State):
+
+    def __init__(self, utils):
+        smach.State.__init__(self,
+                            outcomes = ['new_waypoint'])
+    
+    def execute(self, userdata):
+
+        rospy.set_param('/navigation_param', 'move')
+
+        return 'new_waypoint'
 
 class FSM:
 
@@ -432,7 +449,8 @@ class FSM:
             smach.StateMachine.add('Finding_Cornstalk',state1(self.utils),
                                 transitions = {'cleaning_calibrating':'Cleaning_Calibrating', # NOTE: TEMPORARY CHANGE BACK
                                                'restart':'stop',
-                                               'find_cornstalk':'Finding_Cornstalk'},
+                                               'find_cornstalk':'Finding_Cornstalk',
+                                               'navigate':'Navigate'},
                                 remapping = {'state_1_input':'find_stalk'})  # Go to State B
             
             smach.StateMachine.add('Cleaning_Calibrating',state2(self.utils),
@@ -443,6 +461,9 @@ class FSM:
             
             smach.StateMachine.add('Replace',state4(self.utils),
                                 transitions = {'replace_stop':'stop'})  # Go to State B
+            
+            smach.StateMachine.add('Navigate',state4(self.utils),
+                    transitions = {'new_waypoint':'Finding_Cornstalk'})  # Go to State B
         
         
         sis = smach_ros.IntrospectionServer('server_name', start_state, '/NiMo_SM')
