@@ -119,14 +119,14 @@ class Utils:
         self.GoEMService = rospy.ServiceProxy('GoEM', GoEM)
         rospy.wait_for_service('UngoCorn')
         self.UngoCornService = rospy.ServiceProxy('UngoCorn', UngoCorn)
-        rospy.wait_for_service('get_cal_dat')
-        self.GetCalDatService = rospy.ServiceProxy('get_cal_dat', get_cal_dat)
-        rospy.wait_for_service('act_linear')
-        self.ActLinearService = rospy.ServiceProxy('act_linear', act_linear)
-        rospy.wait_for_service('get_dat')
-        self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
-        rospy.wait_for_service('control_pumps')
-        self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
+        # rospy.wait_for_service('get_cal_dat')
+        # self.GetCalDatService = rospy.ServiceProxy('get_cal_dat', get_cal_dat)
+        # rospy.wait_for_service('act_linear')
+        # self.ActLinearService = rospy.ServiceProxy('act_linear', act_linear)
+        # rospy.wait_for_service('get_dat')
+        # self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
+        # rospy.wait_for_service('control_pumps')
+        # self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
         rospy.loginfo("Done")
 
     def callback(self,idk):
@@ -138,25 +138,33 @@ class state1(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['new_waypoint'])
+                            outcomes = ['new_waypoint','navigate'])
+        
+        self.utils = utils
     
-    def execute(self):
-
-        navigation = rospy.get_param('/navigation_param', 'dont_move')  # dont_move: this is the default value which will not let the robot move incase navigation parameter is not found
-        if (navigation == "done_moving" or navigation == "dont_move"):
-
+    def execute(self, userdata):
+        rospy.logwarn("ENTERING NAVIGATION STATE")
+        try:
+            navigation = rospy.get_param('/navigation_param')  # dont_move: this is the default value which will not let the robot move incase navigation parameter is not found
+        except KeyError:
+            rospy.set_param('/navigation_param', 'dont_move')
+            rospy.logwarn("No parameter set, start finding cornstalk")
             return 'new_waypoint'
-
+        
+        rospy.logwarn("ENTERING NAVIGATION")
         rospy.set_param('/navigation_param', 'move')
-
-        # return 'new_waypoint'
+        while (navigation == "move"):
+            navigation = rospy.get_param('/navigation_param')
+        
+        rospy.logwarn("GOOD TO GO!")
+        return 'new_waypoint'
 
 # State 2 - Finding Cornstalk
 class state2(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['cleaning_calibrating','restart','find_cornstalk'],
+                            outcomes = ['cleaning_calibrating','restart','find_cornstalk','navigate'],
                             input_keys = ['state_1_input'])
         self.utils = utils
         self.width_ang = []
@@ -165,7 +173,7 @@ class state2(smach.State):
         try:
             
             service_ = self.utils
-            service_.services()
+            # service_.services()
 
             # Move xArm to Home position
             HomeOutput = service_.GoHomeService()
@@ -279,11 +287,11 @@ class state3(smach.State):
         
         self.utils = utils
 
-    def execute(self):
+    def execute(self, userdata):
         try:
             # Function Calls
             service_ = self.utils
-            service_.services()
+            # service_.services()
 
             # Move xArm to Home position
             HomeOutput = service_.GoHomeService()
@@ -379,12 +387,11 @@ class state4(smach.State):
                             input_keys = ['state_3_ip'])
         self.utils = utils
 
-    def execute(self):
+    def execute(self, userdata):
 
         try:
             # Function Calls
             service_ = self.utils
-            service_.services()
 
             # Move xArm to Home position
             HomeOutput = service_.GoHomeService()
@@ -450,16 +457,19 @@ class FSM:
 
     def main(self):
 
+        service_ = self.utils
+        service_.services()
         start_state = smach.StateMachine(outcomes = ['stop'])    # Outcome of Main State Machine
         start_state.userdata.find_stalk = (3, 10.0)  # a tuple of num_frames and timeout
 
         with start_state:
 
             smach.StateMachine.add('Navigate',state1(self.utils),
-                                transitions = {'new_waypoint':'Finding_Cornstalk'})  # Go to State B
+                                transitions = {'new_waypoint':'Finding_Cornstalk',
+                                               'navigate':'Navigate'})  # Go to State B
 
             smach.StateMachine.add('Finding_Cornstalk',state2(self.utils),
-                                transitions = {'cleaning_calibrating':'Cleaning_Calibrating',
+                                transitions = {'cleaning_calibrating':'stop',
                                                'restart':'stop',
                                                'find_cornstalk':'Finding_Cornstalk',
                                                'navigate':'Navigate'},
