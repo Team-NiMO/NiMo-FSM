@@ -9,7 +9,7 @@ import numpy as np
 # ROS
 import rospy
 import tf2_ros
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, Pose
 
 # FSM
 import smach
@@ -26,6 +26,9 @@ from nimo_manipulation.srv import *
 
 # End Effector
 from nimo_end_effector.srv import *
+
+# Navigation
+from amiga_path_planning.srv import *
 
 """
 navigation paramters:
@@ -127,6 +130,8 @@ class Utils:
         # self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
         # rospy.wait_for_service('control_pumps')
         # self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
+        rospy.wait_for_service('amiga_planner')
+        self.PlanningService = rospy.ServiceProxy('amiga_planner', planning_request)
         rospy.loginfo("Done")
 
     def callback(self,idk):
@@ -138,25 +143,75 @@ class state1(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['new_waypoint','navigate'])
+                            outcomes = ['new_waypoint','navigate','restart'])
         
         self.utils = utils
     
     def execute(self, userdata):
         rospy.logwarn("ENTERING NAVIGATION STATE")
         try:
-            navigation = rospy.get_param('/navigation_param')  # dont_move: this is the default value which will not let the robot move incase navigation parameter is not found
-        except KeyError:
-            rospy.set_param('/navigation_param', 'dont_move')
-            rospy.logwarn("No parameter set, start finding cornstalk")
-            return 'new_waypoint'
+            service_ = self.utils
+            pose = Pose()
+            pose.position.x = 2.87
+            pose.position.y = 18.47
+            pose.position.z = 0
+
+            pose.orientation.x = 0
+            pose.orientation.y = 0
+            pose.orientation.z = 0
+            pose.orientation.w = 1
+
+            print("Calling Planner")
+            PlannerOutput = service_.PlanningService(pose)
+
+            if (PlannerOutput):
+                print("Found a path, calling navigation")
+
+            navigation = rospy.get_param('/nav_stat')
+
+            if not rospy.has_param('/nav_stat'):
+                rospy.set_param('/nav_stat', True)
+                rospy.logwarn("No parameter set, start finding cornstalk")
+                return 'new_waypoint'
+
+        except rospy.ServiceException as exc:
+            rospy.loginfo('Service did not process request: ' + str(exc))
+            return 'restart'
         
         rospy.logwarn("ENTERING NAVIGATION")
-        rospy.set_param('/navigation_param', 'move')
-        while (navigation == "move"):
-            navigation = rospy.get_param('/navigation_param')
+        while (not navigation):
+            # print(f"Navigation flag: {navigation}")
+            navigation = rospy.get_param('/nav_stat')
         
+        print(f"Navigation done: {navigation}")
         rospy.logwarn("GOOD TO GO!")
+
+        # try:
+        #     service_ = self.utils
+
+        #     pose = Pose()
+        #     pose.position.x = 2.87
+        #     pose.position.y = 18.47
+        #     pose.position.z = 0
+
+        #     pose.orientation.x = 0
+        #     pose.orientation.y = 0
+        #     pose.orientation.z = 0
+        #     pose.orientation.w = 1
+
+
+        #     PlannerOutput = service_.PlanningService(pose)
+
+        #     if (PlannerOutput):
+        #         print("Found a path, call navigation")
+        #     else:
+        #         print("not found")
+        #         return 'restart'
+
+        # except rospy.ServiceException as exc:
+        #     rospy.loginfo('Service did not process request: ' + str(exc)) 
+        #     return 'restart'
+
         return 'new_waypoint'
 
 # State 2 - Finding Cornstalk
@@ -466,7 +521,8 @@ class FSM:
 
             smach.StateMachine.add('Navigate',state1(self.utils),
                                 transitions = {'new_waypoint':'Finding_Cornstalk',
-                                               'navigate':'Navigate'})  # Go to State B
+                                               'navigate':'Navigate',
+                                               'restart':'stop'})  # Go to State B
 
             smach.StateMachine.add('Finding_Cornstalk',state2(self.utils),
                                 transitions = {'cleaning_calibrating':'stop',
