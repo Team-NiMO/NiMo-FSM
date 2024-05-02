@@ -1,0 +1,119 @@
+[global_config]
+  suppress_multiple_term_dialog = True
+[keybindings]
+[profiles]
+  [[default]]
+    cursor_color = "#aaaaaa"
+[layouts]
+  [[default]]
+    [[[window0]]]
+      type = Window
+      parent = ""
+    [[[child1]]]
+      type = Terminal
+      parent = window0
+  [[nimo]]
+    [[[child0]]]
+      type = Window
+      parent = ""
+      order = 0
+      position = 72:27
+      maximised = True
+      fullscreen = False
+      size = 1608, 986
+      title = NiMo_Startup
+      last_active_term = 849e3104-4537-4f74-b1e0-b8365e771b07
+      last_active_window = True
+    [[[child1]]]
+      type = VPaned
+      parent = child0
+      order = 0
+      position = 432
+      ratio = 0.44036697247706424
+    [[[child2]]]
+      type = HPaned
+      parent = child1
+      order = 0
+      position = 1270
+      ratio = 0.7922645040548971
+    [[[terminal3]]]
+      type = Terminal
+      parent = child2
+      order = 0
+      profile = default
+      title = FSM
+      uuid = 849e3104-4537-4f74-b1e0-b8365e771b07
+      command = sleep 10;rosrun NiMo-FSM FSM.py;bash
+    [[[terminal4]]]
+      type = Terminal
+      parent = child2
+      order = 1
+      profile = default
+      title = RViz
+      uuid = 2675df46-26bc-4375-a93b-76e37ed7f29d
+      command = sleep 5;rviz -d ~/nimo_ws/src/NiMo-FSM/docs/nimo.rviz;bash
+    [[[child5]]]
+      type = VPaned
+      parent = child1
+      order = 1
+      position = 133
+      ratio = 0.2427007299270073
+    [[[terminal6]]]
+      type = Terminal
+      parent = child5
+      order = 0
+      profile = default
+      title = Manipulation
+      uuid = 74748631-808d-4462-94fb-08d35820898e
+      command = roslaunch nimo_manipulation nimo_manipulation.launch;bash
+    [[[child7]]]
+      type = VPaned
+      parent = child5
+      order = 1
+      position = 268
+      ratio = 0.6473429951690821
+    [[[child8]]]
+      type = VPaned
+      parent = child7
+      order = 0
+      position = 124
+      ratio = 0.4714828897338403
+    [[[terminal9]]]
+      type = Terminal
+      parent = child8
+      order = 0
+      profile = default
+      title = End Effector
+      uuid = d7466e54-3b5b-464e-bd44-d9e788ef5362
+      command = sleep 5;roslaunch nimo_end_effector nimo_end_effector.launch;bash
+    [[[terminal10]]]
+      type = Terminal
+      parent = child8
+      order = 1
+      profile = default
+      title = Perception
+      uuid = 770b0aca-1f85-4fe1-a426-cb0302036bfa
+      command = sleep 5;roslaunch nimo_perception StalkDetect.launch;bash
+    [[[child11]]]
+      type = VPaned
+      parent = child7
+      order = 1
+      position = 0
+      ratio = 0.0
+    [[[terminal12]]]
+      type = Terminal
+      parent = child11
+      order = 0
+      profile = default
+      title = Debug
+      uuid = 2ce90721-75f1-4c2b-a7e9-d9297bb0a611
+      command = bash
+    [[[terminal13]]]
+      type = Terminal
+      parent = child11
+      order = 1
+      profile = default
+      title = External Mechanisms
+      uuid = 94dc9db6-9d3c-4afc-a9cf-39618395c994
+      command = sleep 5;rosrun act_pump actp.py;bash
+[plugins]

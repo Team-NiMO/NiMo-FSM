@@ -9,14 +9,14 @@ import numpy as np
 # ROS
 import rospy
 import tf2_ros
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, Pose
 
 # FSM
 import smach
 import smach_ros
 
 # Perception
-from stalk_detect.srv import *
+from nimo_perception.srv import *
 
 # External Mechanisms
 from act_pump.srv import *
@@ -27,8 +27,13 @@ from nimo_manipulation.srv import *
 # End Effector
 from nimo_end_effector.srv import *
 
+# Navigation
+from amiga_path_planning.srv import *
+
 """
-UPDATE Readme - asap
+navigation paramters:
+move - calls the navigation node by passing 'move'  parameter
+dont_move - this is the default parameter
 """
 class Utils:
 
@@ -47,7 +52,7 @@ class Utils:
 
         rospy.loginfo('Finding nearest Cornstalk')
         rospy.wait_for_service('GetStalks')
-        stalk = rospy.ServiceProxy('GetStalks', GetStalk)
+        stalk = rospy.ServiceProxy('GetStalks', GetStalks)
 
         try:
         
@@ -129,18 +134,70 @@ class Utils:
         self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
         rospy.wait_for_service('control_pumps')
         self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
+        rospy.wait_for_service('amiga_planner')
+        self.PlanningService = rospy.ServiceProxy('amiga_planner', planning_request)
         rospy.loginfo("Done")
 
     def callback(self,idk):
         ControlPumpsOutput = self.ControlPumpsService("pumpsoff")
         print('pumps off')
 
-# State 1 - Finding Cornstalk
+# State 1: Navigate
 class state1(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['cleaning_calibrating','restart','find_cornstalk'],
+                            outcomes = ['new_waypoint','navigate','restart'])
+        
+        self.utils = utils
+    
+    def execute(self, userdata):
+        rospy.logwarn("ENTERING NAVIGATION STATE")
+        try:
+            service_ = self.utils
+            pose = Pose()
+            pose.position.x = 2.87
+            pose.position.y = 18.47
+            pose.position.z = 0
+
+            pose.orientation.x = 0
+            pose.orientation.y = 0
+            pose.orientation.z = 0
+            pose.orientation.w = 1
+
+            print("Calling Planner")
+            PlannerOutput = service_.PlanningService(pose)
+
+            if (PlannerOutput):
+                print("Found a path, calling navigation")
+
+            navigation = rospy.get_param('/nav_stat')
+
+            if not rospy.has_param('/nav_stat'):
+                rospy.set_param('/nav_stat', True)
+                rospy.logwarn("No parameter set, start finding cornstalk")
+                return 'new_waypoint'
+
+        except rospy.ServiceException as exc:
+            rospy.loginfo('Service did not process request: ' + str(exc))
+            return 'restart'
+        
+        rospy.logwarn("ENTERING NAVIGATION")
+        while (not navigation):
+            # print(f"Navigation flag: {navigation}")
+            navigation = rospy.get_param('/nav_stat')
+        
+        print(f"Navigation done: {navigation}")
+        rospy.logwarn("GOOD TO GO!")
+
+        return 'new_waypoint'
+
+# State 2 - Finding Cornstalk
+class state2(smach.State):
+
+    def __init__(self, utils):
+        smach.State.__init__(self,
+                            outcomes = ['cleaning_calibrating','restart','find_cornstalk','navigate'],
                             input_keys = ['state_1_input'])
         self.utils = utils
         self.width_ang = []
@@ -149,7 +206,7 @@ class state1(smach.State):
         try:
             
             service_ = self.utils
-            service_.services()
+            # service_.services()
 
             # Move xArm to Home position
             HomeOutput = service_.GoHomeService()
@@ -224,7 +281,10 @@ class state1(smach.State):
             GetWidthOutput = service_.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
             if (GetWidthOutput.success == "REPOSITION"):
                 print("Cannot find cornstalks with suitable width")
-                return 'find_cornstalk'
+
+                rospy.set_param('/navigation_param', 'move')
+
+                return 'navigate'
             # width = self.utils.get_width(userdata.state_1_input[0], userdata.state_1_input[1])
             width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
 
@@ -260,8 +320,8 @@ class state1(smach.State):
 
         return 'cleaning_calibrating'
 
-# State 2 - Cleaning and Calibrating
-class state2(smach.State):
+# State 3 - Cleaning and Calibrating
+class state3(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
@@ -273,7 +333,7 @@ class state2(smach.State):
         try:
             # Function Calls
             service_ = self.utils
-            service_.services()
+            # service_.services()
 
             # Move xArm to Home position
             HomeOutput = service_.GoHomeService()
@@ -360,8 +420,8 @@ class state2(smach.State):
 
         return 'insertion'
 
-# State 3: Insertion
-class state3(smach.State):
+# State 4: Insertion
+class state4(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
@@ -374,7 +434,6 @@ class state3(smach.State):
         try:
             # Function Calls
             service_ = self.utils
-            service_.services()
 
             # Move xArm to Home position
             HomeOutput = service_.GoHomeService()
@@ -418,17 +477,18 @@ class state3(smach.State):
 
         return 'restart'
 
-# State 4: Replace/Stop
-class state4(smach.State):
+# State 5: Replace
+class state5(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
                             outcomes = ['replace_stop'])
     
-    def execute(self, userdata):
+    def execute(self):
 
 
         return 'replace_stop'
+
 
 class FSM:
 
@@ -439,26 +499,33 @@ class FSM:
 
     def main(self):
 
+        service_ = self.utils
+        service_.services()
         start_state = smach.StateMachine(outcomes = ['stop'])    # Outcome of Main State Machine
         start_state.userdata.find_stalk = (3, 10.0)  # a tuple of num_frames and timeout
 
         with start_state:
 
-            smach.StateMachine.add('Finding_Cornstalk',state1(self.utils),
-                                transitions = {'cleaning_calibrating':'Insertion', # NOTE: TEMPORARY CHANGE BACK
+            smach.StateMachine.add('Navigate',state1(self.utils),
+                                transitions = {'new_waypoint':'Finding_Cornstalk',
+                                               'navigate':'Navigate',
+                                               'restart':'stop'})  # Go to State B
+
+            smach.StateMachine.add('Finding_Cornstalk',state2(self.utils),
+                                transitions = {'cleaning_calibrating':'Cleaning_Calibrating',
                                                'restart':'stop',
-                                               'find_cornstalk':'Finding_Cornstalk'},
+                                               'find_cornstalk':'Finding_Cornstalk',
+                                               'navigate':'Navigate'},
                                 remapping = {'state_1_input':'find_stalk'})  # Go to State B
             
-            smach.StateMachine.add('Cleaning_Calibrating',state2(self.utils),
+            smach.StateMachine.add('Cleaning_Calibrating',state3(self.utils),
                                 transitions = {'insertion':'Insertion','replace':'Replace', 'restart':'stop'})  # Go to State B
             
-            smach.StateMachine.add('Insertion',state3(self.utils),
+            smach.StateMachine.add('Insertion',state4(self.utils),
                                 transitions = {'replace':'Replace', 'restart':'Finding_Cornstalk'})  # Go to State C
             
-            smach.StateMachine.add('Replace',state4(self.utils),
+            smach.StateMachine.add('Replace',state5(self.utils),
                                 transitions = {'replace_stop':'stop'})  # Go to State B
-        
         
         sis = smach_ros.IntrospectionServer('server_name', start_state, '/NiMo_SM')
         sis.start()
