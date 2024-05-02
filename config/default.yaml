@@ -10,3 +10,6 @@ debug:
 
 sensor:
   sensor_fail_threshold: 3 # Number of consecutive sensor fails before replacement
+
+gripper:
+  replacement: manual      # Manual or automatic replacement of the sensor (auto / manual)

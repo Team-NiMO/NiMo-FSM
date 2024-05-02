@@ -64,6 +64,8 @@ class Utils:
 
         self.sensor_fail_threshold = config["sensor"]["sensor_fail_threshold"]
 
+        self.sensor_replacement = config["gripper"]["replacement"]
+
     def services(self):
         # Load Perception Services
         if self.enable_perception:
@@ -622,7 +624,7 @@ class replace(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['success', 'error'])
+                            outcomes = ['success', 'error', 'stop'])
         self.utils = utils
     
     def execute(self):
@@ -637,6 +639,10 @@ class replace(smach.State):
                 return 'error'
 
             # TODO: Call Replacement service
+
+            # If manual replacement, stop the system
+            if self.utils.sensor_replacement == "manual":
+                return 'stop'
 
         return 'success'
 
@@ -673,7 +679,8 @@ class FSM:
             
             smach.StateMachine.add('Replace',replace(self.utils),
                                 transitions = {'success':'Finding_Cornstalk',
-                                               'error':'stop'})
+                                               'error':'stop',
+                                               'stop':'stop'})
         
         sis = smach_ros.IntrospectionServer('server_name', start_state, '/nimo_fsm')
         sis.start()
