@@ -16,7 +16,7 @@ import smach
 import smach_ros
 
 # Perception
-from stalk_detect.srv import *
+from nimo_perception.srv import *
 
 # External Mechanisms
 from act_pump.srv import *
@@ -52,7 +52,7 @@ class Utils:
 
         rospy.loginfo('Finding nearest Cornstalk')
         rospy.wait_for_service('GetStalks')
-        stalk = rospy.ServiceProxy('GetStalks', GetStalk)
+        stalk = rospy.ServiceProxy('GetStalks', GetStalks)
 
         try:
         
@@ -122,14 +122,14 @@ class Utils:
         self.GoEMService = rospy.ServiceProxy('GoEM', GoEM)
         rospy.wait_for_service('UngoCorn')
         self.UngoCornService = rospy.ServiceProxy('UngoCorn', UngoCorn)
-        # rospy.wait_for_service('get_cal_dat')
-        # self.GetCalDatService = rospy.ServiceProxy('get_cal_dat', get_cal_dat)
-        # rospy.wait_for_service('act_linear')
-        # self.ActLinearService = rospy.ServiceProxy('act_linear', act_linear)
-        # rospy.wait_for_service('get_dat')
-        # self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
-        # rospy.wait_for_service('control_pumps')
-        # self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
+        rospy.wait_for_service('get_cal_dat')
+        self.GetCalDatService = rospy.ServiceProxy('get_cal_dat', get_cal_dat)
+        rospy.wait_for_service('act_linear')
+        self.ActLinearService = rospy.ServiceProxy('act_linear', act_linear)
+        rospy.wait_for_service('get_dat')
+        self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
+        rospy.wait_for_service('control_pumps')
+        self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
         rospy.wait_for_service('amiga_planner')
         self.PlanningService = rospy.ServiceProxy('amiga_planner', planning_request)
         rospy.loginfo("Done")
@@ -185,32 +185,6 @@ class state1(smach.State):
         
         print(f"Navigation done: {navigation}")
         rospy.logwarn("GOOD TO GO!")
-
-        # try:
-        #     service_ = self.utils
-
-        #     pose = Pose()
-        #     pose.position.x = 2.87
-        #     pose.position.y = 18.47
-        #     pose.position.z = 0
-
-        #     pose.orientation.x = 0
-        #     pose.orientation.y = 0
-        #     pose.orientation.z = 0
-        #     pose.orientation.w = 1
-
-
-        #     PlannerOutput = service_.PlanningService(pose)
-
-        #     if (PlannerOutput):
-        #         print("Found a path, call navigation")
-        #     else:
-        #         print("not found")
-        #         return 'restart'
-
-        # except rospy.ServiceException as exc:
-        #     rospy.loginfo('Service did not process request: ' + str(exc)) 
-        #     return 'restart'
 
         return 'new_waypoint'
 
@@ -525,7 +499,7 @@ class FSM:
                                                'restart':'stop'})  # Go to State B
 
             smach.StateMachine.add('Finding_Cornstalk',state2(self.utils),
-                                transitions = {'cleaning_calibrating':'stop',
+                                transitions = {'cleaning_calibrating':'Cleaning_Calibrating',
                                                'restart':'stop',
                                                'find_cornstalk':'Finding_Cornstalk',
                                                'navigate':'Navigate'},
@@ -539,7 +513,6 @@ class FSM:
             
             smach.StateMachine.add('Replace',state5(self.utils),
                                 transitions = {'replace_stop':'stop'})  # Go to State B
-        
         
         sis = smach_ros.IntrospectionServer('server_name', start_state, '/NiMo_SM')
         sis.start()
