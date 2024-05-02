@@ -1,11 +1,12 @@
 debug:
-  verbose: True
+  verbose: True            # Whether to log information and warnings
   
-  enable_perception: False
+  # Enable or disable subsystems for testing
+  enable_perception: True
   enable_manipulation: True
-  enable_end_effector: False
-  enable_external_mechanisms: False
-  enable_navigation: False
+  enable_end_effector: True
+  enable_external_mechanisms: True 
+  enable_navigation: True
 
 sensor:
-  sensor_fail_threshold: 3
+  sensor_fail_threshold: 3 # Number of consecutive sensor fails before replacement

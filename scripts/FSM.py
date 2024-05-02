@@ -14,8 +14,7 @@ from nimo_manipulation.srv import *
 from nimo_end_effector.srv import *
 from act_pump.srv import *
 
-# TEMPORARY
-# from amiga_path_planning.srv import *
+from amiga_path_planning.srv import *
 
 class Utils:
 
@@ -216,7 +215,7 @@ class navigate(smach.State):
     def execute(self, userdata):
         if self.utils.verbose: rospy.loginfo("----- Entering Navigation State -----")
 
-        # TEMPORARY - Load Next Waypoint
+        # TODO: Load waypoints from file?
         self.utils.current_pose = Pose()
         self.utils.current_pose.position.x = 2.87
         self.utils.current_pose.position.y = 18.47
@@ -299,9 +298,7 @@ class find_cornstalk(smach.State):
                         rospy.logerr("GetStalks failed")
                         return 'error'
                 else:
-                    # TEMPORARY
-                    self.utils.near_cs.append([0, -0.4, 0.6])
-                    # reposition_counter += 1
+                    reposition_counter += 1
                 
             # If no cornstalks are found at any angle, reposition
             if reposition_counter == len(angle_list):
@@ -659,7 +656,7 @@ class FSM:
                                                'error':'stop'})
 
             smach.StateMachine.add('Finding_Cornstalk',find_cornstalk(self.utils),
-                                transitions = {'success':'Insertion', # TEMPORARY
+                                transitions = {'success':'Cleaning_Calibrating',
                                                'error':'stop',
                                                'reposition':'Navigate'},
                                 remapping = {'state_1_input':'find_stalk'})

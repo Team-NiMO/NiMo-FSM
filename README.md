@@ -46,10 +46,12 @@ sudo apt-get install ros-noetic-smach-ros
 sudo apt-get install terminator
 ```
 
-Finally, move the [terminator config](/docs/config) to the terminator configuration folder. If you already have terminator configs, you will need to merge the `nimo` config with your existing config file.
+Move the [terminator config](/docs/config) to the terminator configuration folder. If you already have terminator configs, you will need to merge the `nimo` config with your existing config file.
 ```
 cp docs/config ~/.config/terminator/
 ```
+
+Finally, update the [configuration file](/config/default.yaml) if necessary.
 
 ## Use
 There are two methods to launch the system: 
