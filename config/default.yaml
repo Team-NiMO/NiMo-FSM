@@ -1,7 +1,11 @@
 debug:
   verbose: True
+  
   enable_perception: False
   enable_manipulation: True
   enable_end_effector: False
   enable_external_mechanisms: False
   enable_navigation: False
+
+sensor:
+  sensor_fail_threshold: 3

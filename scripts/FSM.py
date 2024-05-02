@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import time
 import numpy as np
 import rospy
 from geometry_msgs.msg import Point, Pose
@@ -7,6 +6,8 @@ import smach
 import smach_ros
 import yaml
 import rospkg
+import os
+import datetime
 
 from nimo_perception.srv import *
 from nimo_manipulation.srv import *
@@ -31,6 +32,12 @@ class Utils:
         self.near_cs = []
         self.threshold = 0.1
         self.insertion_ang = None
+        self.sensor_fail_num = 0
+
+        try:
+            self.run_index = max([int(f[len("RUN"):].split("-")[0]) for f in os.listdir(self.package_path+"/output")]) + 1
+        except:
+            self.run_index = 0
 
     def loadConfig(self):
         '''
@@ -50,6 +57,8 @@ class Utils:
         self.enable_end_effector = config["debug"]["enable_end_effector"]
         self.enable_external_mechanisms = config["debug"]["enable_external_mechanisms"]
         self.enable_navigation = config["debug"]["enable_navigation"]
+
+        self.sensor_fail_threshold = config["sensor"]["sensor_fail_threshold"]
 
     def services(self):
         # Load Perception Services
@@ -203,22 +212,22 @@ class navigate(smach.State):
         if self.utils.verbose: rospy.loginfo("----- Entering Navigation State -----")
 
         # TEMPORARY - Load Next Waypoint
-        pose = Pose()
-        pose.position.x = 2.87
-        pose.position.y = 18.47
-        pose.position.z = 0
+        self.utils.current_pose = Pose()
+        self.utils.current_pose.position.x = 2.87
+        self.utils.current_pose.position.y = 18.47
+        self.utils.current_pose.position.z = 0
 
-        pose.orientation.x = 0
-        pose.orientation.y = 0
-        pose.orientation.z = 0
-        pose.orientation.w = 1
+        self.utils.current_pose.orientation.x = 0
+        self.utils.current_pose.orientation.y = 0
+        self.utils.current_pose.orientation.z = 0
+        self.utils.current_pose.orientation.w = 1
 
         # TODO: STOW ARM
 
         if self.utils.enable_navigation:
             # Call Planner
             if self.utils.verbose: rospy.loginfo("Calling planner service")
-            outcome = self.utils.PlanningService(pose)
+            outcome = self.utils.PlanningService(self.utils.current_pose)
 
             if not outcome:
                 rospy.logerr("Planner failed")
@@ -569,7 +578,19 @@ class insert(smach.State):
                 outcome = self.utils.GetDatService()
                 if outcome.success == "ERROR":
                     rospy.logerr("GetDat failed")
-                    return 'replace' 
+                    self.utils.sensor_fail_num += 1
+                else:
+                    self.utils.sensor_fail_num = 0
+
+                # Replace sensor if it has failed N times in a row
+                if self.utils.sensor_fail_num == self.utils.sensor_fail_threshold:
+                    return 'replace'
+                
+                # Write the time, position, and nitrate value to file
+                time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H:%M:%S")
+                pose_str = "{}, {}".format(self.utils.current_pose.x, self.utils.current_pose.y)
+                f = open("RUN{}.csv".format(self.utils.run_index), "a")
+                f.write(time_str+","+pose_str+","+"{}".format(outcome.nitrate_val))
 
                 # Retract the linear actuator
                 if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")

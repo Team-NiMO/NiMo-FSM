@@ -89,10 +89,6 @@ More information about these is detailed in the [Perception](https://github.com/
 
 If terminator is not killed properly, the windows may not load in the correct configuration. If this is the case, kill terminator and restart.
 
-**`Waiting for services...`**
-
-This means that not all of the services are running. If this does not resolve after a few seconds, check the terminal windows to see if any of the subsystems are showing an error. If no system is showing an error, the [FSM node](/scripts/FSM.py) can be modified in line 100 to log which services are getting loaded and which are not.
-
 **Serial Port Issues**
 
 Since both the external mechanisms and end effector use serial communication, if the communication is interrupted, the port may change. Launching the Arduino application and checking the ports can determine which device is linked to which port. More detailed instructions can be found in the respective repositories ([External Mechanisms](https://github.com/Team-NiMO/NiMo-ExternalMechanisms), [End Effector](https://github.com/Team-NiMO/NiMo-EndEffector)).
