@@ -111,6 +111,10 @@ class Utils:
         rospy.wait_for_service('LookatCorn')
         self.LookatCornService = rospy.ServiceProxy('LookatCorn', LookatCorn)
         rospy.wait_for_service('GoCorn')
+
+        self.LookatAngleService = rospy.ServiceProxy('LookatAngle', LookatAngle)
+        rospy.wait_for_service('LookatAngle')
+
         self.GoCornService = rospy.ServiceProxy('GoCorn', GoCorn)
         rospy.wait_for_service('ArcCorn')
         self.ArcCornService = rospy.ServiceProxy('ArcCorn', ArcCorn)
@@ -219,29 +223,38 @@ class state2(smach.State):
                 print("Cannot move arm to look at corn")
                 return 'restart'
             
-            # Get Grasp Point (last point added to the near_cs list)
-            grasp_flag = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
-            if (grasp_flag == "ERROR"):
-                print("Perception Failed")
-                return 'restart'
-            elif (grasp_flag == "REPOSITION"):
-                print("No cornstalks nearby, call navigation")
-
-                # Move xArm to Home position
-                HomeOutput = service_.GoHomeService()
-
-                # If error in moving to xArm, restart FSM
-                if (HomeOutput.success == "ERROR"):
-                    print("Cannot move arm to home position 2")
+            temp = 0
+            for i in [-30, 0, 30]:
+                LookatAngleOutput = service_.LookatAngleService(joint_angle=i)
+                if (LookatAngleOutput.success == "ERROR"):
+                    print("Error in the Move")
+                    return 'restart'
+            
+                # Get Grasp Point (last point added to the near_cs list)
+                grasp_flag = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
+                if (grasp_flag == "ERROR"):
+                    print("Perception Failed")
                     return 'restart'
                 
-                rospy.set_param('/navigation_param', 'move')
-
-                return 'navigate'
+                if (grasp_flag) == "SUCCESS":
+                    break
+                if (grasp_flag) == "REPOSITION":
+                    temp += 1
             
+            if (temp == 3):
+                    print("No cornstalks nearby") 
+                    # Move xArm to Home position
+                    HomeOutput = service_.GoHomeService()
+
+                    # If error in moving to xArm, restart FSM
+                    if (HomeOutput.success == "ERROR"):
+                        print("Cannot move arm to home position 2")
+                        # return 'restart'
+                    return 'restart'
+
             current_stalk = Point(x = self.utils.near_cs[-1][0],
-                                  y = self.utils.near_cs[-1][1],
-                                  z = self.utils.near_cs[-1][2])
+                                y = self.utils.near_cs[-1][1],
+                                z = self.utils.near_cs[-1][2])
             
             # Move xArm to Home position
             HomeOutput = service_.GoHomeService()
