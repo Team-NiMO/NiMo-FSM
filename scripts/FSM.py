@@ -179,8 +179,11 @@ class Utils:
         return "REPOSITION"
 
     def callback(self,idk):
-        ControlPumpsOutput = self.ControlPumpsService("pumpsoff")
-        print('pumps off')
+        if self.enable_external_mechanisms:
+            if self.verbose: rospy.loginfo("Calling ControlPumps Off")
+            outcome = self.ControlPumpsService("pumpsoff")
+            if outcome.success == "ERROR":
+                rospy.logerr("ControlPumps Off failed")
 
 # State 1: Navigate
 class navigate(smach.State):
@@ -231,8 +234,10 @@ class navigate(smach.State):
 class find_cornstalk(smach.State):
     '''
     Find Cornstalk State
-    - Reset Arm
-
+    - Bring arm to home position
+    - Look for cornstalk at multiple angles
+    - Move to suitable cornstalk and find maximum width
+    - Bring arm to home position
     '''
 
     def __init__(self, utils):
@@ -249,7 +254,7 @@ class find_cornstalk(smach.State):
             if self.utils.verbose: rospy.loginfo("Calling GoHome")
             outcome = self.utils.GoHomeService()
             if outcome.success == "ERROR":
-                rospy.logerr("GoHome Failed")
+                rospy.logerr("GoHome failed")
                 return 'error'
 
             # Look at the cornstalk
@@ -371,103 +376,145 @@ class find_cornstalk(smach.State):
 
 # State 3 - Cleaning and Calibrating
 class clean_calibrate(smach.State):
+    '''
+    Clean Calibrate State
+    - Bring arm to home position
+    - Expose sensor to cleaning solution
+    - Expose sensor to low calibration solution
+    - Expose sensor to high calibration solution
+    - Expose sensor to cleaning solution
+    - Bring arm to home position
+    '''
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['insertion','replace','restart'])
+                            outcomes = ['success', 'error', 'replace']) # NOTE: END EFFECTOR CURRENTLY DOES NOT CHEKC FOR REPLACEMENT AT THIS STAGE
         
         self.utils = utils
 
     def execute(self, userdata):
-        try:
-            # Function Calls
-            service_ = self.utils
-            # service_.services()
+        if self.utils.verbose: rospy.loginfo("Entering Clean Calibrate State")
 
-            # Move xArm to Home position
-            HomeOutput = service_.GoHomeService()
-
-            # If error in moving to xArm, restart FSM
-            if (HomeOutput.success == "ERROR"):
-                print("Cannot move arm to home position")
-                return 'restart'
+        if self.utils.enable_manipulation:
+            # Reset the arm
+            if self.utils.verbose: rospy.loginfo("Calling GoHome")
+            outcome = self.utils.GoHomeService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoHome failed")
+                return 'error'
             
-            # Bring out the Nitrate sensor
-            ActLinearOutput = service_.ActLinearService("extend")
-            if (ActLinearOutput.flag == "ERROR"):
-                return 'restart'
-            
-            # Go to EM: clean
-            GoEMOutput = service_.GoEMService("clean")
-            if (GoEMOutput.success == "DONE"):
-                # act pump: clean
-                # time.sleep(15)
-                print('clean pump')
-                ControlPumpsOutput = service_.ControlPumpsService("pump1")
-                if (ControlPumpsOutput.success == True):
-                    rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
-                    time.sleep(15)   # delay of 15 seconds - do it in a better way
-                    # ControlPumpsOutput = service_.ControlPumpsService("pumpsoff")
+            # Extend the linear actuator
+            if self.utils.enable_end_effector:
+                if self.utils.verbose: rospy.loginfo("Calling ActLinear Extend")
+                outcome = self.utils.ActLinearService("extend")
+                if outcome.success == "ERROR":
+                    rospy.logerr("ActLinear Extend failed")
+                    return 'error'
                 
-            # Go to EM: calib_low
-            if (ControlPumpsOutput.success == True):
-                GoEMOutput = service_.GoEMService("cal_low")
-            
-            if (GoEMOutput.success == "DONE"):
-                # act pump: calib_low
-                # time.sleep(15)
-                print('cal low pump')
-                ControlPumpsOutput = service_.ControlPumpsService("pump2")
-                if (ControlPumpsOutput.success == True):
+            # Move the end effector to the cleaning pump
+            if self.utils.verbose: rospy.loginfo("Calling GoEM Clean")
+            outcome = self.utils.GoEMService("clean")
+            if outcome.success == "ERROR":
+                rospy.logerr("GoEM Clean failed")
+                return 'error'
 
-                    # Get Cal data
-                    rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
-                    CalDatOutput = service_.GetCalDatService("cal_low")
-                    time.sleep(15)   # delay of 15 seconds - do it in a better way
+            # Turn on the cleaning pump
+            if self.utils.enable_external_mechanisms:
+                if self.utils.verbose: rospy.loginfo("Calling ControlPumps Pump1")
+                outcome = self.utils.ControlPumpsService("pump1")
+                if outcome.success == "ERROR":
+                    rospy.logerr("ControlPumps Pump1 failed")
+                    return 'error'
+                
+                # Wait for 15s before turning pumps off
+                rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
 
-            # Go to EM: calib_high
-            if (ControlPumpsOutput.success == True):
-                GoEMOutput = service_.GoEMService("cal_high")
+            # Move the end effector to the low calibration pump
+            if self.utils.verbose: rospy.loginfo("Calling GoEM Low Calibration")
+            outcome = self.utils.GoEMService("cal_low")
+            if outcome.success == "ERROR":
+                rospy.logerr("GoEM Low Calibration failed")
+                return 'error'
 
-            if (GoEMOutput.success == "DONE"):
-                # act pump: calib_high
-                # time.sleep(15)
-                print('cal high pump')
-                ControlPumpsOutput = service_.ControlPumpsService("pump3")
-                if (ControlPumpsOutput.success == True):
+            # Turn on the low calibration pump
+            if self.utils.enable_external_mechanisms:
+                if self.utils.verbose: rospy.loginfo("Calling ControlPumps Pump2")
+                outcome = self.utils.ControlPumpsService("pump2")
+                if outcome.success == "ERROR":
+                    rospy.logerr("ControlPumps Pump2 failed")
+                    return 'error'
+                
+                # Wait for 15s before turning pumps off
+                rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
 
-                    # Get Cal data
-                    rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
-                    CalDatOutput1 = service_.GetCalDatService("cal_high")
-                    time.sleep(15)   # delay of 15 seconds - do it in a better way
+                # Record reading for low calibration
+                if self.utils.enable_end_effector:
+                    if self.utils.verbose: rospy.loginfo("Calling GetCalDat Low Calibration")
+                    outcome = self.utils.GetCalDatService("cal_low")
+                    if outcome.success == "ERROR":
+                        rospy.logerr("GetCalDat Low Calibration failed")
+                        return 'error'
                     
-            # Go to EM: clean
-            if (ControlPumpsOutput.success == True):
-                GoEMOutput = service_.GoEMService("clean")
-            # GoEMOutput = service_.GoEMService("clean")
+            # Move the end effector to the high calibration pump
+            if self.utils.verbose: rospy.loginfo("Calling GoEM High Calibration")
+            outcome = self.utils.GoEMService("cal_high")
+            if outcome.success == "ERROR":
+                rospy.logerr("GoEM High Calibration failed")
+                return 'error'
 
-            if (GoEMOutput.success == "DONE"):
-                # act pump: clean
-                # time.sleep(15)
-                print('clean pump')
-                ControlPumpsOutput = service_.ControlPumpsService("pump1")
-                if (ControlPumpsOutput.success == True):
-                    rospy.timer.Timer(rospy.rostime.Duration(15), service_.callback, oneshot=True)
-                    time.sleep(15)   # delay of 15 seconds - do it in a better way
+            # Turn on the high calibration pump
+            if self.utils.enable_external_mechanisms:
+                if self.utils.verbose: rospy.loginfo("Calling ControlPumps Pump3")
+                outcome = self.utils.ControlPumpsService("pump3")
+                if outcome.success == "ERROR":
+                    rospy.logerr("ControlPumps Pump3 failed")
+                    return 'error'
+                
+                # Wait for 15s before turning pumps off
+                rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
+
+                # Record reading for high calibration
+                if self.utils.enable_end_effector:
+                    if self.utils.verbose: rospy.loginfo("Calling GetCalDat High Calibration")
+                    outcome = self.utils.GetCalDatService("cal_high")
+                    if outcome.success == "ERROR":
+                        rospy.logerr("GetCalDat High Calibration failed")
+                        return 'error'
                     
-            if (CalDatOutput1.flag == "ERROR"):
-                return 'replace'
-            
-            # Put the Nitrate Sensor back in
-            ActLinearOutput1 = service_.ActLinearService("retract")
-            if (ActLinearOutput1.flag == "ERROR"):
-                return 'restart'
-            
-        except rospy.ServiceException as exc:
-            rospy.loginfo('Service did not process request: ' + str(exc))
-            return 'restart'
+            # Move the end effector to the cleaning pump
+            if self.utils.verbose: rospy.loginfo("Calling GoEM Clean")
+            outcome = self.utils.GoEMService("clean")
+            if outcome.success == "ERROR":
+                rospy.logerr("GoEM Clean failed")
+                return 'error'
 
-        return 'insertion'
+            # Turn on the cleaning pump
+            if self.utils.enable_external_mechanisms:
+                if self.utils.verbose: rospy.loginfo("Calling ControlPumps Pump1")
+                outcome = self.utils.ControlPumpsService("pump1")
+                if outcome.success == "ERROR":
+                    rospy.logerr("ControlPumps Pump1 failed")
+                    return 'error'
+                
+                # Wait for 15s before turning pumps off
+                rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
+
+            # Retract the linear actuator
+            if self.utils.enable_end_effector:
+                if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")
+                outcome = self.utils.ActLinearService("retract")
+                if outcome.success == "ERROR":
+                    rospy.logerr("ActLinear Retract failed")
+                    return 'error'
+
+            # Reset the arm
+            if self.utils.verbose: rospy.loginfo("Calling GoHome")
+            outcome = self.utils.GoHomeService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoHome failed")
+                return 'error'
+
+        return 'success'
 
 # State 4: Insertion
 class insert(smach.State):
