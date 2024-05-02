@@ -86,6 +86,10 @@ Launching the system also starts two visualization tools:
 
 More information about these is detailed in the [Perception](https://github.com/Team-NiMO/NiMo-Perception_v2), [Manipulation](https://github.com/Team-NiMO/NiMo-Manipulation), and [End Effector](https://github.com/Team-NiMO/NiMo-EndEffector) repositories.
 
+## Other
+### Swapping End Effector
+For swapping end effectors, refer to [swap.md](/docs/swap.md).
+
 ## Common Issues
 **General Errors**
 

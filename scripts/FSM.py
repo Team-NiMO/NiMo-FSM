@@ -243,6 +243,10 @@ class navigate(smach.State):
             if self.utils.verbose: rospy.loginfo("Waiting for navigation to complete...")
             while not rospy.get_param('/nav_stat'): pass
 
+            # Reset cornstalk list
+            # NOTE: Since the cornstalks are stored in the frame of the arm, they need to be reset after moving the base
+            self.near_cs = []
+
         return 'success'
 
 # State 2 - Finding Cornstalk
@@ -638,13 +642,26 @@ class replace(smach.State):
                 rospy.logerr("GoHome failed")
                 return 'error'
 
-            # TODO: Call Replacement service
-
             # If manual replacement, stop the system
             if self.utils.sensor_replacement == "manual":
+                # TODO: Call replacement service
+                
+                # Extend the linear actuator
+                if self.utils.enable_end_effector:
+                    if self.utils.verbose: rospy.loginfo("Calling ActLinear Extend")
+                    outcome = self.utils.ActLinearService("extend")
+                    if outcome.success == "ERROR":
+                        rospy.logerr("ActLinear Extend failed")
+                        return 'error'
+                
                 return 'stop'
+            
+            # If automatic replacement, try finding more cornstalks
+            elif self.utils.sensor_replacement == "auto":
+                # TODO: Call auto replacement service
+                return 'success'
 
-        return 'success'
+        return 'error'
 
 class FSM:
     def __init__(self):
