@@ -34,10 +34,15 @@ class Utils:
         self.insertion_ang = None
         self.sensor_fail_num = 0
 
+        # Setup data file
         try:
-            self.run_index = max([int(f[len("RUN"):].split("-")[0]) for f in os.listdir(self.package_path+"/output")]) + 1
+            self.run_index = max([int(f[len("RUN"):].split(".")[0]) for f in os.listdir(self.package_path+"/output")]) + 1
         except:
             self.run_index = 0
+
+        if self.verbose: rospy.loginfo("Creating RUN{}.csv".format(self.run_index))
+        f = open(self.package_path+"/output/RUN{}.csv".format(self.run_index),"w")
+        f.write("time,x,y,nitrate_value\n")
 
     def loadConfig(self):
         '''
@@ -588,9 +593,11 @@ class insert(smach.State):
                 
                 # Write the time, position, and nitrate value to file
                 time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H:%M:%S")
-                pose_str = "{}, {}".format(self.utils.current_pose.x, self.utils.current_pose.y)
-                f = open("RUN{}.csv".format(self.utils.run_index), "a")
-                f.write(time_str+","+pose_str+","+"{}".format(outcome.nitrate_val))
+                pose_str = "{}, {}".format(self.utils.current_pose.position.x, self.utils.current_pose.position.y)
+                f = open(self.utils.package_path+"/output/RUN{}.csv".format(self.utils.run_index), "a")
+                if self.utils.verbose: rospy.loginfo("Writing nitrate value {} PPM to RUN{}.csv".format(120, self.utils.run_index))
+                f.write(time_str+","+pose_str+","+"{}\n".format(120))
+                f.close()
 
                 # Retract the linear actuator
                 if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")
@@ -598,7 +605,7 @@ class insert(smach.State):
                 if outcome.success == "ERROR":
                     rospy.logerr("ActLinear Retract failed")
                     return 'error'
-            
+
             # Reset the arm
             if self.utils.verbose: rospy.loginfo("Calling Unhook")
             outcome = self.utils.UnhookCornService()
@@ -652,7 +659,7 @@ class FSM:
                                                'error':'stop'})
 
             smach.StateMachine.add('Finding_Cornstalk',find_cornstalk(self.utils),
-                                transitions = {'success':'Cleaning_Calibrating',
+                                transitions = {'success':'Insertion', # TEMPORARY
                                                'error':'stop',
                                                'reposition':'Navigate'},
                                 remapping = {'state_1_input':'find_stalk'})
