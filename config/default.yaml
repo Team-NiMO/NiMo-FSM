@@ -13,3 +13,4 @@ sensor:
 
 gripper:
   replacement: manual      # Manual or automatic replacement of the sensor (auto / manual)
+  clean_extend: True       # Whether to extend the linear actuator for cleaning and calibrating

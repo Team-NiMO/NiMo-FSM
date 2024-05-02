@@ -66,6 +66,7 @@ class Utils:
         self.sensor_fail_threshold = config["sensor"]["sensor_fail_threshold"]
 
         self.sensor_replacement = config["gripper"]["replacement"]
+        self.clean_extend = config["gripper"]["clean_extend"]
 
     def services(self):
         # Load Perception Services
@@ -419,9 +420,8 @@ class clean_calibrate(smach.State):
                 rospy.logerr("GoHome failed")
                 return 'error'
             
-            # TODO: Not necessary for Janice's Gripper
             # Extend the linear actuator
-            if self.utils.enable_end_effector:
+            if self.utils.enable_end_effector and self.utils.clean_extend:
                 if self.utils.verbose: rospy.loginfo("Calling ActLinear Extend")
                 outcome = self.utils.ActLinearService("extend")
                 if outcome.success == "ERROR":
@@ -516,9 +516,8 @@ class clean_calibrate(smach.State):
                 # Wait for 15s before turning pumps off
                 rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
 
-            # TODO: Not necessary for Janice's Gripper
             # Retract the linear actuator
-            if self.utils.enable_end_effector:
+            if self.utils.enable_end_effector and self.utils.clean_extend:
                 if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")
                 outcome = self.utils.ActLinearService("retract")
                 if outcome.success == "ERROR":
@@ -645,7 +644,7 @@ class replace(smach.State):
 
             # If manual replacement, stop the system
             if self.utils.sensor_replacement == "manual":
-                # TODO: Call replacement service
+                # TODO: Call manual replacement service
                 
                 # Extend the linear actuator
                 if self.utils.enable_end_effector:

@@ -16,14 +16,17 @@ Install the alternate gripper by fastening the screws and plugging in the cables
 ### FSM
 In `NiMo-FSM/config/default.yaml` change the arguments:
 - `replacement` - Manual or automatic replacement of the sensor
-    - `manual` - Manual replacement of the sensor
-    - `auto` - Automatic replacement of the sensor
+    - `'manual'` - Manual replacement of the sensor
+    - `'auto'` - Automatic replacement of the sensor
+- `clean_extend` - Whether to extend the linear actuator for cleaning and calibrating
+    - `True` - Extend the linear actuator to expose the sensor 
+    - `False` - Do not extend the linear actuator for cleaning
 
 ## Maniuplation
 In `NiMo-Manipulation/config/default.yaml` change the arguments:
 - `approach` - The method of approach for grasping the cornstalk
-    - `left` - Approach from the left (hook motion)
-    - `front` - Approach from the front
+    - `'left'` - Approach from the left (hook motion)
+    - `'front'` - Approach from the front
 
 In the file `xarm_ros/xarm6_moveit_config/launch/realMove_exec.launch`, add or modify the static transforms for the `gripper` and `camera_link` at the end of the file. They should be in the format:
 
