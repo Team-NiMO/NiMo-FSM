@@ -38,7 +38,7 @@ class Utils:
         '''
 
         rospack = rospkg.RosPack()
-        self.package_path = rospack.get_path('NiMo-FSM')
+        self.package_path = rospack.get_path('nimo_fsm')
         config_path = self.package_path + '/config/default.yaml'
         with open(config_path) as file:
             config = yaml.load(file, Loader=yaml.FullLoader)
@@ -280,7 +280,9 @@ class find_cornstalk(smach.State):
                         rospy.logerr("GetStalks failed")
                         return 'error'
                 else:
-                    reposition_counter += 1
+                    # TEMPORARY
+                    self.utils.near_cs.append([0, -0.4, 0.6])
+                    # reposition_counter += 1
                 
             # If no cornstalks are found at any angle, reposition
             if reposition_counter == len(angle_list):
@@ -365,7 +367,7 @@ class find_cornstalk(smach.State):
             if outcome.success == "ERROR":
                 rospy.logerr("UngoCorn failed")
 
-        return 'cleaning_calibrating'
+        return 'success'
 
 # State 3 - Cleaning and Calibrating
 class clean_calibrate(smach.State):
@@ -553,10 +555,9 @@ class FSM:
                                                'error':'stop'})
 
             smach.StateMachine.add('Finding_Cornstalk',find_cornstalk(self.utils),
-                                transitions = {'cleaning_calibrating':'Cleaning_Calibrating',
+                                transitions = {'success':'Cleaning_Calibrating',
                                                'error':'stop',
-                                               'find_cornstalk':'Finding_Cornstalk',
-                                               'navigate':'Navigate'},
+                                               'reposition':'Navigate'},
                                 remapping = {'state_1_input':'find_stalk'})  # Go to State B
             
             smach.StateMachine.add('Cleaning_Calibrating',clean_calibrate(self.utils),
