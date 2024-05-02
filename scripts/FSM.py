@@ -530,7 +530,7 @@ class insert(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['success','error'],
+                            outcomes = ['success','error','replace'],
                             input_keys = ['state_3_ip'])
         self.utils = utils
 
@@ -579,10 +579,10 @@ class insert(smach.State):
                     return 'error'
             
             # Reset the arm
-            if self.utils.verbose: rospy.loginfo("Calling GoHome")
-            outcome = self.utils.GoHomeService()
+            if self.utils.verbose: rospy.loginfo("Calling Unhook")
+            outcome = self.utils.UnhookCornService()
             if outcome.success == "ERROR":
-                rospy.logerr("GoHome failed")
+                rospy.logerr("Unhook failed")
                 return 'error'
                 
         return 'success'
@@ -647,7 +647,8 @@ class FSM:
                                                'replace':'Replace'})
             
             smach.StateMachine.add('Replace',replace(self.utils),
-                                transitions = {'replace_stop':'stop'})
+                                transitions = {'success':'Finding_Cornstalk',
+                                               'error':'stop'})
         
         sis = smach_ros.IntrospectionServer('server_name', start_state, '/nimo_fsm')
         sis.start()
