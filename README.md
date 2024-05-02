@@ -87,6 +87,10 @@ Launching the system also starts two visualization tools:
 More information about these is detailed in the [Perception](https://github.com/Team-NiMO/NiMo-Perception_v2), [Manipulation](https://github.com/Team-NiMO/NiMo-Manipulation), and [End Effector](https://github.com/Team-NiMO/NiMo-EndEffector) repositories.
 
 ## Common Issues
+**General Errors**
+
+All errors should appear on the FSM terminal, if the error is not with the FSM itself, determine which subsystem is causing an error and refer to the errors in that terminal for more details.
+
 **Terminal doesn't load properly**
 
 If terminator is not killed properly, the windows may not load in the correct configuration. If this is the case, kill terminator and restart.
