@@ -608,7 +608,9 @@ class FSM:
                                 remapping = {'state_1_input':'find_stalk'})  # Go to State B
             
             smach.StateMachine.add('Cleaning_Calibrating',clean_calibrate(self.utils),
-                                transitions = {'insertion':'Insertion','replace':'Replace', 'restart':'stop'})  # Go to State B
+                                transitions = {'success':'Insertion',
+                                               'error':'stop',
+                                               'replace':'Replace'})  # Go to State B
             
             smach.StateMachine.add('Insertion',insert(self.utils),
                                 transitions = {'replace':'Replace', 'restart':'Finding_Cornstalk'})  # Go to State C
