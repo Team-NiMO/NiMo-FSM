@@ -2,6 +2,7 @@
 import numpy as np
 import rospy
 from geometry_msgs.msg import Point, Pose
+from std_msgs.msg import Bool
 import smach
 import smach_ros
 import yaml
@@ -28,7 +29,7 @@ class Utils:
         self.services()
 
         # Initialize internal variables
-        self.near_cs = []
+        self.near_cs = [1] # Initialized so that navigation advances to waypoint instead of reposition
         self.threshold = 0.1
         self.insertion_ang = None
         self.sensor_fail_num = 0
@@ -134,7 +135,7 @@ class Utils:
             if self.verbose: rospy.loginfo("Waiting for external mechanisms services")
             try:
                 rospy.wait_for_service('amiga_planner', timeout=1)
-                self.PlanningService = rospy.ServiceProxy('amiga_planner', planning_request)
+                self.PlanningService = rospy.ServiceProxy('amiga_planner', planning_request_2)
             except Exception as e:
                 rospy.logerr("Unable to load navigation services")
                 raise e
@@ -220,13 +221,18 @@ class navigate(smach.State):
         # TODO: STOW ARM
 
         if self.utils.enable_navigation:
-            # Call Planner
+            # Call Planner to reposition if no cornstalks are found
             if len(self.utils.near_cs) == 0:
                 if self.utils.verbose: rospy.loginfo("Calling planner for reposition")
-                outcome = self.utils.PlanningService(0)
+                input = Bool()
+                input.data = False
+                outcome = self.utils.PlanningService(input)
+            # Call Planner to advance to next waypoint if cornstalks have been found
             else:
                 if self.utils.verbose: rospy.loginfo("Calling planner for next waypoint")
-                outcome = self.utils.PlanningService(1)
+                input = Bool()
+                input.data = True
+                outcome = self.utils.PlanningService(input)
 
             if not outcome:
                 rospy.logerr("Planner failed")
@@ -297,12 +303,7 @@ class find_cornstalk(smach.State):
                         rospy.logerr("GetStalks failed")
                         return 'error'
                 else:
-                    # TEMPORARY
-                    # reposition_counter += 1
-                    if len(self.utils.near_cs) == 0:
-                        self.utils.near_cs.append([0, -0.4, 0.6])
-                    else:
-                        reposition_counter += 1
+                    reposition_counter += 1
                 
             # If no cornstalks are found at any angle, reposition
             if reposition_counter == len(angle_list):
