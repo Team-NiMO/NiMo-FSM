@@ -1,0 +1,7 @@
+debug:
+  verbose: True
+  enable_perception: False
+  enable_manipulation: False
+  enable_end_effector: False
+  enable_external_mechanisms: False
+  enable_navigation: False

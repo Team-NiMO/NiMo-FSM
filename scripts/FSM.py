@@ -1,53 +1,129 @@
-import os
-import sys
+#!/usr/bin/env python3
 import time
-import math
-import argparse
-import signal
 import numpy as np
-
-# ROS
 import rospy
-import tf2_ros
 from geometry_msgs.msg import Point, Pose
-
-# FSM
 import smach
 import smach_ros
+import yaml
+import rospkg
 
-# Perception
 from nimo_perception.srv import *
-
-# External Mechanisms
+from nimo_manipulation.srv import *
+from nimo_end_effector.srv import *
 from act_pump.srv import *
 
-# Manipulation
-from nimo_manipulation.srv import *
+# TEMPORARY
+# from amiga_path_planning.srv import *
 
-# End Effector
-from nimo_end_effector.srv import *
-
-# Navigation
-from amiga_path_planning.srv import *
-
-"""
-navigation paramters:
-move - calls the navigation node by passing 'move'  parameter
-dont_move - this is the default parameter
-"""
 class Utils:
 
     def __init__(self):
+        # Load parameters from configuration file
+        self.loadConfig()
 
+        if self.verbose: rospy.loginfo("Starting nimo_fsm node")
+
+        # Load services
+        self.services()
+
+        # Initialize internal variables
         self.near_cs = []
         self.threshold = 0.1
         self.insertion_ang = None
 
-    # GetStalk is the .srv file
-    # get_stalk: name of the service being called
-    # stalk: service client object
-    # output_1: this has three outputs - string(success), int(num_frames), stalk_detect/grasp_point[] (grasp_points) {grasp_points is an array of type stalk_detect (which is basically x,y,z coordinate)}
-    # near_cs: unordered list of nearby cornstalks
+    def loadConfig(self):
+        '''
+        Load configuration from yaml file
+        '''
+
+        rospack = rospkg.RosPack()
+        self.package_path = rospack.get_path('NiMo-FSM')
+        config_path = self.package_path + '/config/default.yaml'
+        with open(config_path) as file:
+            config = yaml.load(file, Loader=yaml.FullLoader)
+
+        self.verbose = config["debug"]["verbose"]
+
+        self.enable_perception = config["debug"]["enable_perception"]
+        self.enable_manipulation = config["debug"]["enable_manipulation"]
+        self.enable_end_effector = config["debug"]["enable_end_effector"]
+        self.enable_external_mechanisms = config["debug"]["enable_external_mechanisms"]
+        self.enable_navigation = config["debug"]["enable_navigation"]
+
+    def services(self):
+        # Load Perception Services
+        if self.enable_perception:
+            if self.verbose: rospy.loginfo("Waiting for perception services")
+            try:
+                rospy.wait_for_service('GetWidth', timeout=1)
+                rospy.wait_for_service('Stalks', timeout=1)
+                self.GetWidthService = rospy.ServiceProxy('GetWidth', GetWidth)
+                self.GetStalksService = rospy.ServiceProxy('GetStalks', GetStalks)
+            except Exception as e:
+                rospy.logerr("Unable to load perception services")
+                raise e
+
+        # Load Manipulation Services
+        if self.enable_manipulation:
+            if self.verbose: rospy.loginfo("Waiting for manipulation services")
+            try:
+                rospy.wait_for_service('GoHome', timeout=1)
+                rospy.wait_for_service('LookatCorn', timeout=1)
+                rospy.wait_for_service('LookatAngle', timeout=1)
+                rospy.wait_for_service('GoCorn', timeout=1)
+                rospy.wait_for_service('UngoCorn', timeout=1)
+                rospy.wait_for_service('ArcCorn', timeout=1)
+                rospy.wait_for_service('HookCorn', timeout=1)
+                rospy.wait_for_service('UnhookCorn', timeout=1)
+                rospy.wait_for_service('GoEM', timeout=1)
+                self.GoHomeService = rospy.ServiceProxy('GoHome', GoHome)
+                self.LookatCornService = rospy.ServiceProxy('LookatCorn', LookatCorn)
+                self.LookatAngleService = rospy.ServiceProxy('LookatAngle', LookatAngle)
+                self.GoCornService = rospy.ServiceProxy('GoCorn', GoCorn)
+                self.UngoCornService = rospy.ServiceProxy('UngoCorn', UngoCorn)
+                self.ArcCornService = rospy.ServiceProxy('ArcCorn', ArcCorn)
+                self.HookCornService = rospy.ServiceProxy('HookCorn', HookCorn)
+                self.UnhookCornService = rospy.ServiceProxy('UnhookCorn', UnhookCorn)
+                self.GoEMService = rospy.ServiceProxy('GoEM', GoEM)
+            except Exception as e:
+                rospy.logerr("Unable to load manipulation services")
+                raise e
+        
+        # Load End Effector Services
+        if self.enable_end_effector:
+            if self.verbose: rospy.loginfo("Waiting for end effector services")
+            try:
+                rospy.wait_for_service('get_cal_dat', timeout=1)
+                rospy.wait_for_service('act_linear', timeout=1)
+                rospy.wait_for_service('get_dat', timeout=1)
+                self.GetCalDatService = rospy.ServiceProxy('get_cal_dat', get_cal_dat)
+                self.ActLinearService = rospy.ServiceProxy('act_linear', act_linear)
+                self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
+            except Exception as e:
+                rospy.logerr("Unable to load end effector services")
+                raise e
+        
+        # Load External Mechanisms Services
+        if self.enable_external_mechanisms:
+            if self.verbose: rospy.loginfo("Waiting for external mechanisms services")
+            try:
+                rospy.wait_for_service('control_pumps', timeout=1)
+                self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
+            except Exception as e:
+                rospy.logerr("Unable to load external mechanisms services")
+                raise e
+
+        # Load Navigation Services
+        if self.enable_navigation:
+            if self.verbose: rospy.loginfo("Waiting for external mechanisms services")
+            try:
+                rospy.wait_for_service('amiga_planner', timeout=1)
+                self.PlanningService = rospy.ServiceProxy('amiga_planner', planning_request)
+            except Exception as e:
+                rospy.logerr("Unable to load navigation services")
+                raise e
+
     def get_grasp (self, num_frames, timeout):
 
         rospy.loginfo('Finding nearest Cornstalk')
@@ -101,227 +177,198 @@ class Utils:
             return "ERROR"
 
         return "REPOSITION"
-    
-    def services(self):
-        rospy.loginfo("Waiting for services...")
-        rospy.wait_for_service('GetWidth')
-        self.GetWidthService = rospy.ServiceProxy('GetWidth', GetWidth)
-        rospy.wait_for_service('GoHome')
-        self.GoHomeService = rospy.ServiceProxy('GoHome', GoHome)
-        rospy.wait_for_service('LookatCorn')
-        self.LookatCornService = rospy.ServiceProxy('LookatCorn', LookatCorn)
-        rospy.wait_for_service('GoCorn')
-
-        self.LookatAngleService = rospy.ServiceProxy('LookatAngle', LookatAngle)
-        rospy.wait_for_service('LookatAngle')
-
-        self.GoCornService = rospy.ServiceProxy('GoCorn', GoCorn)
-        rospy.wait_for_service('ArcCorn')
-        self.ArcCornService = rospy.ServiceProxy('ArcCorn', ArcCorn)
-        rospy.wait_for_service('HookCorn')
-        self.HookCornService = rospy.ServiceProxy('HookCorn', HookCorn)
-        rospy.wait_for_service('UnhookCorn')
-        self.UnhookCornService = rospy.ServiceProxy('UnhookCorn', UnhookCorn)
-        rospy.wait_for_service('GoEM')
-        self.GoEMService = rospy.ServiceProxy('GoEM', GoEM)
-        rospy.wait_for_service('UngoCorn')
-        self.UngoCornService = rospy.ServiceProxy('UngoCorn', UngoCorn)
-        rospy.wait_for_service('get_cal_dat')
-        self.GetCalDatService = rospy.ServiceProxy('get_cal_dat', get_cal_dat)
-        rospy.wait_for_service('act_linear')
-        self.ActLinearService = rospy.ServiceProxy('act_linear', act_linear)
-        rospy.wait_for_service('get_dat')
-        self.GetDatService = rospy.ServiceProxy('get_dat', get_dat)
-        rospy.wait_for_service('control_pumps')
-        self.ControlPumpsService = rospy.ServiceProxy('control_pumps', service1)
-        rospy.wait_for_service('amiga_planner')
-        self.PlanningService = rospy.ServiceProxy('amiga_planner', planning_request)
-        rospy.loginfo("Done")
 
     def callback(self,idk):
         ControlPumpsOutput = self.ControlPumpsService("pumpsoff")
         print('pumps off')
 
 # State 1: Navigate
-class state1(smach.State):
+class navigate(smach.State):
+    '''
+    Navigation State
+    - Call planner service
+    - Check nav_stat parameter until navigation is complete
+    '''
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['new_waypoint','navigate','restart'])
+                            outcomes = ['success','error'])
         
         self.utils = utils
     
     def execute(self, userdata):
-        rospy.logwarn("ENTERING NAVIGATION STATE")
-        try:
-            service_ = self.utils
-            pose = Pose()
-            pose.position.x = 2.87
-            pose.position.y = 18.47
-            pose.position.z = 0
+        if self.utils.verbose: rospy.loginfo("Entering Navigation State")
 
-            pose.orientation.x = 0
-            pose.orientation.y = 0
-            pose.orientation.z = 0
-            pose.orientation.w = 1
+        # TEMPORARY - Load Next Waypoint
+        pose = Pose()
+        pose.position.x = 2.87
+        pose.position.y = 18.47
+        pose.position.z = 0
 
-            print("Calling Planner")
-            PlannerOutput = service_.PlanningService(pose)
+        pose.orientation.x = 0
+        pose.orientation.y = 0
+        pose.orientation.z = 0
+        pose.orientation.w = 1
 
-            if (PlannerOutput):
-                print("Found a path, calling navigation")
+        # TODO: STOW ARM
 
-            navigation = rospy.get_param('/nav_stat')
+        if self.utils.enable_navigation:
+            # Call Planner
+            if self.utils.verbose: rospy.loginfo("Calling planner service")
+            outcome = self.utils.PlanningService(pose)
 
-            if not rospy.has_param('/nav_stat'):
-                rospy.set_param('/nav_stat', True)
-                rospy.logwarn("No parameter set, start finding cornstalk")
-                return 'new_waypoint'
+            if not outcome:
+                rospy.logerr("Planner failed")
+                return 'error'
 
-        except rospy.ServiceException as exc:
-            rospy.loginfo('Service did not process request: ' + str(exc))
-            return 'restart'
-        
-        rospy.logwarn("ENTERING NAVIGATION")
-        while (not navigation):
-            # print(f"Navigation flag: {navigation}")
-            navigation = rospy.get_param('/nav_stat')
-        
-        print(f"Navigation done: {navigation}")
-        rospy.logwarn("GOOD TO GO!")
+            # Wait for navigation to complete
+            if self.utils.verbose: rospy.loginfo("Waiting for navigation to complete...")
+            while not rospy.get_param('/nav_stat'): pass
 
-        return 'new_waypoint'
+        return 'success'
 
 # State 2 - Finding Cornstalk
-class state2(smach.State):
+class find_cornstalk(smach.State):
+    '''
+    Find Cornstalk State
+    - Reset Arm
+
+    '''
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['cleaning_calibrating','restart','find_cornstalk','navigate'],
-                            input_keys = ['state_1_input'])
+                            outcomes = ['success','error','reposition'])
         self.utils = utils
         self.width_ang = []
         
     def execute(self, userdata):
-        try:
-            
-            service_ = self.utils
-            # service_.services()
+        if self.utils.verbose: rospy.loginfo("Entering Find Cornstalk State")
 
-            # Move xArm to Home position
-            HomeOutput = service_.GoHomeService()
+        if self.utils.enable_manipulation:
+            # Reset the arm
+            if self.utils.verbose: rospy.loginfo("Calling GoHome")
+            outcome = self.utils.GoHomeService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoHome Failed")
+                return 'error'
 
-            # If error in moving to xArm, restart FSM
-            if (HomeOutput.success == "ERROR"):
-                print("Cannot move arm to home position 1")
-                return 'restart'
-            
-            LookOutput = service_.LookatCornService()
+            # Look at the cornstalk
+            if self.utils.verbose: rospy.loginfo("Calling LookatCorn")
+            outcome = self.utils.LookatCornService()
+            if outcome.success == "ERROR":
+                rospy.logerr("LookatCorn failed")
+                return 'error'
 
-            # If error in moving to xArm, restart FSM
-            if (LookOutput.success == "ERROR"):
-                print("Cannot move arm to look at corn")
-                return 'restart'
-            
-            temp = 0
-            for i in [-30, 0, 30]:
-                LookatAngleOutput = service_.LookatAngleService(joint_angle=i)
-                if (LookatAngleOutput.success == "ERROR"):
-                    print("Error in the Move")
-                    return 'restart'
-            
-                # Get Grasp Point (last point added to the near_cs list)
-                grasp_flag = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
-                if (grasp_flag == "ERROR"):
-                    print("Perception Failed")
-                    return 'restart'
+            # Rotate the end effector left and right to view cornstalks
+            reposition_counter = 0
+            angle_list = [-30, 0, 30]
+            for angle in angle_list:
+                # Rotate end effector while looking at stalk
+                outcome = self.utils.LookatAngleService(joint_angle=angle)
+                if outcome.success == "ERROR":
+                    rospy.logerr("LookAtAngle failed")
+                    return 'error'
                 
-                if (grasp_flag) == "SUCCESS":
-                    break
-                if (grasp_flag) == "REPOSITION":
-                    temp += 1
+                # Check for cornstalks
+                if self.utils.enable_perception:
+                    outcome = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
+                    if outcome == "SUCCESS":
+                        break
+                    elif outcome == "REPOSITION":
+                        reposition_counter += 1
+                    elif outcome == "ERROR":
+                        rospy.logerr("GetStalks failed")
+                        return 'error'
+                else:
+                    reposition_counter += 1
+                
+            # If no cornstalks are found at any angle, reposition
+            if reposition_counter == len(angle_list):
+                if self.utils.verbose: rospy.loginfo("No cornstalks found nearby")
+                return 'reposition'
             
-            if (temp == 3):
-                    print("No cornstalks nearby") 
-                    # Move xArm to Home position
-                    HomeOutput = service_.GoHomeService()
-
-                    # If error in moving to xArm, restart FSM
-                    if (HomeOutput.success == "ERROR"):
-                        print("Cannot move arm to home position 2")
-                        # return 'restart'
-                    return 'restart'
-
+            
+            if self.utils.verbose: rospy.loginfo("Calling GoHome")
+            outcome = self.utils.GoHomeService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoHome failed")
+                return 'error'
+            
+            # Move to stalk for inspection
             current_stalk = Point(x = self.utils.near_cs[-1][0],
                                 y = self.utils.near_cs[-1][1],
                                 z = self.utils.near_cs[-1][2])
+
+            if self.utils.verbose: rospy.loginfo("Calling GoCorn")
+            outcome = self.utils.GoCornService(grasp_point = current_stalk)
+            if outcome.success == "ERROR":
+                rospy.logerr("GoCorn failed")
+                return 'error'
             
-            # Move xArm to Home position
-            HomeOutput = service_.GoHomeService()
-            
-            # If error in moving to xArm, restart FSM
-            if (HomeOutput.success == "ERROR"):
-                print("Cannot move arm to home position 2")
-                return 'restart'
-            
-            # Move xArm to that CornStalk
-            Go2CornOutput = service_.GoCornService(grasp_point = current_stalk)
-            if (Go2CornOutput.success == "ERROR"):
-                print("Cannot move to the corn")
-                return 'restart'
-            
-            # Find Suitable width of the Cornstalk
+            # Go to minimum angle
             width_ang = []
-
-            ArcMoveOutput = service_.ArcCornService(relative_angle=-30)
-            if (ArcMoveOutput.success == "ERROR"):
-                print("Cannot perform Arc Movement")
-                return 'restart'
+            if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
+            ArcMoveOutput = self.utils.ArcCornService(relative_angle=-30)
+            if ArcMoveOutput.success == "ERROR":
+                rospy.logerr("GoCorn failed")
+                return 'error'
             
-            GetWidthOutput = service_.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
-            if (GetWidthOutput.success == "REPOSITION"):
-                print("Cannot find cornstalks with suitable width")
-
-                rospy.set_param('/navigation_param', 'move')
-
-                return 'navigate'
-            # width = self.utils.get_width(userdata.state_1_input[0], userdata.state_1_input[1])
-            width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
-
-            for i in range(4):
-                ArcMoveOutput = service_.ArcCornService(relative_angle=15)
-                if (ArcMoveOutput.success == "ERROR"):
-                    print("Error in Arc Move")
-                    return 'restart'
-
-                GetWidthOutput = service_.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
+            # Get Width
+            if self.utils.enable_perception:
+                if self.utils.verbose: rospy.loginfo("Calling GetWidth")
+                GetWidthOutput = self.utils.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
+                if GetWidthOutput.success == "ERROR":
+                    rospy.logerr("GetWidth failed")
+                    return 'error'
+                
                 width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
-        
+            else:
+                width_ang.append((0, ArcMoveOutput.absolute_angle))
+
+            # Check other angles for width
+            for i in range(4):
+                # Go to next angle
+                if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
+                ArcMoveOutput = self.utils.ArcCornService(relative_angle=15)
+                if ArcMoveOutput.success == "ERROR":
+                    rospy.logerr("GoCorn failed")
+                    return 'error'
+                
+                # Get Width
+                if self.utils.enable_perception:
+                    if self.utils.verbose: rospy.loginfo("Calling GetWidth")
+                    GetWidthOutput = self.utils.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
+                    if GetWidthOutput.success == "ERROR":
+                        rospy.logerr("GetWidth failed")
+                        return 'error'
+                    
+                    width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
+                else:
+                    width_ang.append((0, ArcMoveOutput.absolute_angle))
+
             max_pair = max(width_ang, key = lambda x:x[0])
             self.utils.insertion_ang = max_pair[1]
+            if self.utils.verbose:
+                rospy.loginfo("Width Angle list is: {}".format(width_ang))
+                rospy.loginfo("Maximum insertion angle is {}".format(self.utils.insertion_ang))
 
-            rospy.logwarn(width_ang)
-
-            ArcMoveOutput = service_.ArcCornService(relative_angle=-30)
-            if (ArcMoveOutput.success == "ERROR"):
-                print("Cannot perform Arc Movement")
-                return 'restart'
+            # Return to 0 angle
+            width_ang = []
+            if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
+            outcome = self.utils.ArcCornService(relative_angle=-30)
+            if outcome.success == "ERROR":
+                rospy.logerr("GoCorn failed")
+                return 'error'
             
-            UngoCornOutput = service_.UngoCornService()
-            if (UngoCornOutput.success == "ERROR"):
-                return 'restart'
-
-            print(f"Width Angle list is: {width_ang}")
-            print(f"Insertion angle is: {self.utils.insertion_ang}")
-
-        except rospy.ServiceException as exc:
-            rospy.loginfo('Service did not process request: ' + str(exc))
-            return 'restart'
+            if self.utils.verbose: rospy.loginfo("Calling UngoCorn")
+            outcome = self.utils.UngoCornService()
+            if outcome.success == "ERROR":
+                rospy.logerr("UngoCorn failed")
 
         return 'cleaning_calibrating'
 
 # State 3 - Cleaning and Calibrating
-class state3(smach.State):
+class clean_calibrate(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
@@ -421,7 +468,7 @@ class state3(smach.State):
         return 'insertion'
 
 # State 4: Insertion
-class state4(smach.State):
+class insert(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
@@ -478,7 +525,7 @@ class state4(smach.State):
         return 'restart'
 
 # State 5: Replace
-class state5(smach.State):
+class replace(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
@@ -491,40 +538,34 @@ class state5(smach.State):
 
 
 class FSM:
-
     def __init__(self):
-        rospy.init_node('nimo_state_machine')
         self.utils = Utils()
         self.main()
 
     def main(self):
-
-        service_ = self.utils
-        service_.services()
         start_state = smach.StateMachine(outcomes = ['stop'])    # Outcome of Main State Machine
         start_state.userdata.find_stalk = (3, 10.0)  # a tuple of num_frames and timeout
 
         with start_state:
 
-            smach.StateMachine.add('Navigate',state1(self.utils),
-                                transitions = {'new_waypoint':'Finding_Cornstalk',
-                                               'navigate':'Navigate',
-                                               'restart':'stop'})  # Go to State B
+            smach.StateMachine.add('Navigate',navigate(self.utils),
+                                transitions = {'success':'Finding_Cornstalk',
+                                               'error':'stop'})
 
-            smach.StateMachine.add('Finding_Cornstalk',state2(self.utils),
+            smach.StateMachine.add('Finding_Cornstalk',find_cornstalk(self.utils),
                                 transitions = {'cleaning_calibrating':'Cleaning_Calibrating',
-                                               'restart':'stop',
+                                               'error':'stop',
                                                'find_cornstalk':'Finding_Cornstalk',
                                                'navigate':'Navigate'},
                                 remapping = {'state_1_input':'find_stalk'})  # Go to State B
             
-            smach.StateMachine.add('Cleaning_Calibrating',state3(self.utils),
+            smach.StateMachine.add('Cleaning_Calibrating',clean_calibrate(self.utils),
                                 transitions = {'insertion':'Insertion','replace':'Replace', 'restart':'stop'})  # Go to State B
             
-            smach.StateMachine.add('Insertion',state4(self.utils),
+            smach.StateMachine.add('Insertion',insert(self.utils),
                                 transitions = {'replace':'Replace', 'restart':'Finding_Cornstalk'})  # Go to State C
             
-            smach.StateMachine.add('Replace',state5(self.utils),
+            smach.StateMachine.add('Replace',replace(self.utils),
                                 transitions = {'replace_stop':'stop'})  # Go to State B
         
         sis = smach_ros.IntrospectionServer('server_name', start_state, '/NiMo_SM')
@@ -532,8 +573,8 @@ class FSM:
 
         outcome = start_state.execute()
 
-        rospy.spin()
         sis.stop()
 
 if __name__ == '__main__':
+    rospy.init_node('nimo_fsm')
     fsm = FSM()
