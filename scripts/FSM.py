@@ -200,7 +200,7 @@ class navigate(smach.State):
         self.utils = utils
     
     def execute(self, userdata):
-        if self.utils.verbose: rospy.loginfo("Entering Navigation State")
+        if self.utils.verbose: rospy.loginfo("----- Entering Navigation State -----")
 
         # TEMPORARY - Load Next Waypoint
         pose = Pose()
@@ -247,7 +247,7 @@ class find_cornstalk(smach.State):
         self.width_ang = []
         
     def execute(self, userdata):
-        if self.utils.verbose: rospy.loginfo("Entering Find Cornstalk State")
+        if self.utils.verbose: rospy.loginfo("----- Entering Find Cornstalk State -----")
 
         if self.utils.enable_manipulation:
             # Reset the arm
@@ -393,7 +393,7 @@ class clean_calibrate(smach.State):
         self.utils = utils
 
     def execute(self, userdata):
-        if self.utils.verbose: rospy.loginfo("Entering Clean Calibrate State")
+        if self.utils.verbose: rospy.loginfo("----- Entering Clean Calibrate State -----")
 
         if self.utils.enable_manipulation:
             # Reset the arm
@@ -518,73 +518,102 @@ class clean_calibrate(smach.State):
 
 # State 4: Insertion
 class insert(smach.State):
+    '''
+    Insert State
+    - Bring arm to home position
+    - Hook cornstalk
+    - Insert sensor
+    - Collect Data
+    - Retract Sensor
+    - Bring arm to home position
+    '''
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['replace','restart'],
+                            outcomes = ['success','error'],
                             input_keys = ['state_3_ip'])
         self.utils = utils
 
     def execute(self, userdata):
+        if self.utils.verbose: rospy.loginfo("----- Entering Insert State -----")
 
-        try:
-            # Function Calls
-            service_ = self.utils
-
-            # Move xArm to Home position
-            HomeOutput = service_.GoHomeService()
-
-            # If error in moving to xArm, restart FSM
-            if (HomeOutput.success == "ERROR"):
-                print("Cannot move arm to home position insert")
-                return 'restart'
-
+        if self.utils.enable_manipulation:
+            # Reset the arm
+            if self.utils.verbose: rospy.loginfo("Calling GoHome")
+            outcome = self.utils.GoHomeService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoHome failed")
+                return 'error'
+            
+            # Hook Stalk
             current_stalk = Point(x = self.utils.near_cs[-1][0],
                                   y = self.utils.near_cs[-1][1],
                                   z = self.utils.near_cs[-1][2])
             
-            GoHook = service_.HookCornService(grasp_point = current_stalk, insert_angle = self.utils.insertion_ang)
-            if (GoHook.success == "ERROR"):
-                print("Error in Hooking")
-                return 'restart'
-            
-            ActLinearOutput = service_.ActLinearService("extend")
-            if (ActLinearOutput.flag == "SUCCESS"):
-                GetDatOutput = service_.GetDatService()
-            
-            rospy.logwarn(GetDatOutput.nitrate_val)
+            if self.utils.verbose: rospy.loginfo("Calling HookCorn")
+            outcome = self.utils.HookCornService(grasp_point = current_stalk, insert_angle = self.utils.insertion_ang)
+            if outcome.success == "ERROR":
+                rospy.logerr("HookCorn failed")
+                return 'error'
 
-            ActLinearOutput1 = service_.ActLinearService("retract")
+            if self.utils.enable_end_effector:
+                # Extend the linear actuator
+                if self.utils.verbose: rospy.loginfo("Calling ActLinear Extend")
+                outcome = self.utils.ActLinearService("extend")
+                if outcome.success == "ERROR":
+                    rospy.logerr("ActLinear Extend failed")
+                    return 'error'
+                
+                # Collect Nitrate data
+                if self.utils.verbose: rospy.loginfo("Calling GetDat")
+                outcome = self.utils.GetDatService()
+                if outcome.success == "ERROR":
+                    rospy.logerr("GetDat failed")
+                    return 'replace' 
 
-            Unhook = service_.UnhookCornService()
-            if (Unhook.success == "ERROR"):
-                print("Error in Unhooking")
-                return 'restart'
-
-            if (GetDatOutput.flag == "ERROR"):
-                print("Replace Sensor")
-                return 'replace'
+                # Retract the linear actuator
+                if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")
+                outcome = self.utils.ActLinearService("retract")
+                if outcome.success == "ERROR":
+                    rospy.logerr("ActLinear Retract failed")
+                    return 'error'
             
-            return 'restart'
-            
-        except rospy.ServiceException as exc:
-            rospy.loginfo('Service did not process request: ' + str(exc))
-            return 'restart'
-
-        return 'restart'
+            # Reset the arm
+            if self.utils.verbose: rospy.loginfo("Calling GoHome")
+            outcome = self.utils.GoHomeService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoHome failed")
+                return 'error'
+                
+        return 'success'
 
 # State 5: Replace
 class replace(smach.State):
+    '''
+    Replace State
+    - Bring arm to home position
+    - Perform replacement action
+    '''
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['replace_stop'])
+                            outcomes = ['success', 'error'])
+        self.utils = utils
     
     def execute(self):
+        if self.utils.verbose: rospy.loginfo("----- Entering Replace State -----")
 
+        if self.utils.enable_manipulation:
+            # Reset the arm
+            if self.utils.verbose: rospy.loginfo("Calling GoHome")
+            outcome = self.utils.GoHomeService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoHome failed")
+                return 'error'
 
-        return 'replace_stop'
+            # TODO: Call Replacement service
 
+        return 'success'
 
 class FSM:
     def __init__(self):
@@ -605,24 +634,24 @@ class FSM:
                                 transitions = {'success':'Cleaning_Calibrating',
                                                'error':'stop',
                                                'reposition':'Navigate'},
-                                remapping = {'state_1_input':'find_stalk'})  # Go to State B
+                                remapping = {'state_1_input':'find_stalk'})
             
             smach.StateMachine.add('Cleaning_Calibrating',clean_calibrate(self.utils),
                                 transitions = {'success':'Insertion',
                                                'error':'stop',
-                                               'replace':'Replace'})  # Go to State B
+                                               'replace':'Replace'})
             
             smach.StateMachine.add('Insertion',insert(self.utils),
-                                transitions = {'replace':'Replace', 'restart':'Finding_Cornstalk'})  # Go to State C
+                                transitions = {'success':'Navigate',
+                                               'error':'stop',
+                                               'replace':'Replace'})
             
             smach.StateMachine.add('Replace',replace(self.utils),
-                                transitions = {'replace_stop':'stop'})  # Go to State B
+                                transitions = {'replace_stop':'stop'})
         
-        sis = smach_ros.IntrospectionServer('server_name', start_state, '/NiMo_SM')
+        sis = smach_ros.IntrospectionServer('server_name', start_state, '/nimo_fsm')
         sis.start()
-
-        outcome = start_state.execute()
-
+        start_state.execute()
         sis.stop()
 
 if __name__ == '__main__':
