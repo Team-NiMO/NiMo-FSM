@@ -217,23 +217,16 @@ class navigate(smach.State):
     def execute(self, userdata):
         if self.utils.verbose: rospy.loginfo("----- Entering Navigation State -----")
 
-        # TODO: Load waypoints from file?
-        self.utils.current_pose = Pose()
-        self.utils.current_pose.position.x = 2.87
-        self.utils.current_pose.position.y = 18.47
-        self.utils.current_pose.position.z = 0
-
-        self.utils.current_pose.orientation.x = 0
-        self.utils.current_pose.orientation.y = 0
-        self.utils.current_pose.orientation.z = 0
-        self.utils.current_pose.orientation.w = 1
-
         # TODO: STOW ARM
 
         if self.utils.enable_navigation:
             # Call Planner
-            if self.utils.verbose: rospy.loginfo("Calling planner service")
-            outcome = self.utils.PlanningService(self.utils.current_pose)
+            if len(self.utils.near_cs) == 0:
+                if self.utils.verbose: rospy.loginfo("Calling planner for reposition")
+                outcome = self.utils.PlanningService(0)
+            else:
+                if self.utils.verbose: rospy.loginfo("Calling planner for next waypoint")
+                outcome = self.utils.PlanningService(1)
 
             if not outcome:
                 rospy.logerr("Planner failed")
@@ -245,7 +238,7 @@ class navigate(smach.State):
 
             # Reset cornstalk list
             # NOTE: Since the cornstalks are stored in the frame of the arm, they need to be reset after moving the base
-            self.near_cs = []
+            self.utils.near_cs = []
 
         return 'success'
 
@@ -304,7 +297,12 @@ class find_cornstalk(smach.State):
                         rospy.logerr("GetStalks failed")
                         return 'error'
                 else:
-                    reposition_counter += 1
+                    # TEMPORARY
+                    # reposition_counter += 1
+                    if len(self.utils.near_cs) == 0:
+                        self.utils.near_cs.append([0, -0.4, 0.6])
+                    else:
+                        reposition_counter += 1
                 
             # If no cornstalks are found at any angle, reposition
             if reposition_counter == len(angle_list):
