@@ -419,6 +419,7 @@ class clean_calibrate(smach.State):
                 rospy.logerr("GoHome failed")
                 return 'error'
             
+            # TODO: Not necessary for Janice's Gripper
             # Extend the linear actuator
             if self.utils.enable_end_effector:
                 if self.utils.verbose: rospy.loginfo("Calling ActLinear Extend")
@@ -515,6 +516,7 @@ class clean_calibrate(smach.State):
                 # Wait for 15s before turning pumps off
                 rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
 
+            # TODO: Not necessary for Janice's Gripper
             # Retract the linear actuator
             if self.utils.enable_end_effector:
                 if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")
@@ -658,6 +660,7 @@ class replace(smach.State):
             # If automatic replacement, try finding more cornstalks
             elif self.utils.sensor_replacement == "auto":
                 # TODO: Call auto replacement service
+                # TODO: Call end effector motions
                 return 'success'
 
         return 'error'
