@@ -15,12 +15,16 @@ More information about the communication between the FSM and these subsystems is
 
 <img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/fsm.drawio.png" width="650">
 
-The overall flow of the FSM is motivated by the functional architecture shown below. The FSM is broken into five states:
-- `Navigation` - System idle while the base is navigating the cornfield [NOT IMPLEMENTED]
+The overall flow of the FSM is motivated by the functional architecture shown below. The FSM is broken into six states:
+- `Global` - Check whether it is necessary to navigate to field or continue to next waypoint
+    - `global_nav_stat` : True -> Global navigation in progress | False -> amiga already in field
+- `Navigation` - Navigate to next waypoint or delta step depending on cornstalk success
+    - `found_plan` : True -> Plan has been found | False -> Plan has not been found
+    - `more_waypoints` : True -> More waypoints exist | False -> All waypoints have been exhausted
 - `Finding_Cornstalk` - Detecting cornstalks in the area and selecting one to determine the optimal insertion side
 - `Cleaning_Calibrating` - Cleaning and calibrating the sensor to calibrate and check sensor functionality 
 - `Insertion` - Grasping the cornstalk, inserting the sensor, and taking readings from nitrate sensor
-- `Replace` - Depending on the end-effector, moving to manually or automatically replace a broken sensor [NOT IMPLEMENTED]
+- `Replace` - Depending on the end-effector, moving to manually or automatically replace a broken sensor
 
 <img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/IntegrationFunctional.drawio.png" width="650">
 

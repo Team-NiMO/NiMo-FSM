@@ -66,6 +66,11 @@ class Utils:
         self.enable_external_mechanisms = config["debug"]["enable_external_mechanisms"]
         self.enable_navigation = config["debug"]["enable_navigation"]
 
+        # Fake perception cannot be enabled if real perception is
+        self.enable_fake_perception = config["debug"]["enable_fake_perception"] and not self.enable_perception
+        if config["debug"]["enable_fake_perception"] and self.enable_perception:
+            rospy.logwarn("Real and Fake perception cannot both be enabled, defaulting to real perception")
+
         self.sensor_fail_threshold = config["sensor"]["sensor_fail_threshold"]
 
         self.sensor_replacement = config["gripper"]["replacement"]
@@ -205,6 +210,37 @@ class Utils:
             if outcome.success == "ERROR":
                 rospy.logerr("ControlPumps Off failed")
 
+# State 0: Global Navigate
+class global_navigate(smach.State):
+    '''
+    Global Navigation State
+    - Check Global Navigation parameter
+    '''
+
+    def __init__(self, utils):
+        smach.State.__init__(self,
+                            outcomes = ['success','error',''])
+        
+        self.utils = utils
+    
+    def execute(self, userdata):
+        if self.utils.verbose: rospy.loginfo("----- Entering Global Navigation State -----")
+
+        if self.utils.enable_navigation:
+            outcome = rospy.get_param('/global_nav_stat')
+
+            # If global_nav_stat is false, already in field -> navigate to next waypoint
+            if not outcome:
+                if self.utils.verbose: rospy.loginfo("Restart detected, moving to next waypoint")
+                return 'restart'
+            
+            # Otherwise, wait for navigation to complete
+            if self.utils.verbose: rospy.loginfo("Waiting for global navigation to complete...")
+            while not rospy.get_param('/nav_stat'): pass
+            
+        return 'success'
+            
+
 # State 1: Navigate
 class navigate(smach.State):
     '''
@@ -215,7 +251,7 @@ class navigate(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['success','error'])
+                            outcomes = ['success','error','stop'])
         
         self.utils = utils
     
@@ -238,9 +274,13 @@ class navigate(smach.State):
                 input.data = True
                 outcome = self.utils.PlanningService(input)
 
-            if not outcome:
-                rospy.logerr("Planner failed")
-                return 'error'
+                while not outcome.found_plan and outcome.more_waypoints:
+                    rospy.logwarn("Planner failed, trying next waypoint")
+                    outcome = self.utils.PlanningService(input)
+
+                if not outcome.more_waypoints:
+                    if self.utils.verbose: rospy.logwarn("No more waypoints")
+                    return 'stop'
 
             # Wait for navigation to complete
             if self.utils.verbose: rospy.loginfo("Waiting for navigation to complete...")
@@ -306,14 +346,17 @@ class find_cornstalk(smach.State):
                     elif outcome == "ERROR":
                         rospy.logerr("GetStalks failed")
                         return 'error'
-                else:
-                    reposition_counter += 1
+                    else:
+                        reposition_counter += 1
+                # Create a fake cornstalk detection
+                elif self.utils.enable_fake_perception:
+                    self.utils.near_cs.append([0, -0.4, 0.6])
+                    break
                 
             # If no cornstalks are found at any angle, reposition
             if reposition_counter == len(angle_list):
                 if self.utils.verbose: rospy.loginfo("No cornstalks found nearby")
                 return 'reposition'
-            
             
             if self.utils.verbose: rospy.loginfo("Calling GoHome")
             outcome = self.utils.GoHomeService()
@@ -678,9 +721,15 @@ class FSM:
 
         with start_state:
 
+            smach.StateMachine.add('Global_Navigate',global_navigate(self.utils),
+                                transitiosn = {'success':'Finding_Cornstalk',
+                                               'error':'stop',
+                                               'restart':'Navigate'})
+
             smach.StateMachine.add('Navigate',navigate(self.utils),
                                 transitions = {'success':'Finding_Cornstalk',
-                                               'error':'stop'})
+                                               'error':'stop',
+                                               'stop':'stop'})
 
             smach.StateMachine.add('Finding_Cornstalk',find_cornstalk(self.utils),
                                 transitions = {'success':'Cleaning_Calibrating',
