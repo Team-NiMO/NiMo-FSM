@@ -346,15 +346,13 @@ class find_cornstalk(smach.State):
                     elif outcome == "ERROR":
                         rospy.logerr("GetStalks failed")
                         return 'error'
-                    else:
-                        reposition_counter += 1
+
                 # Create a fake cornstalk detection if it hasn't already been done
-                if self.utils.enable_fake_perception:
-                    if len(self.utils.near_cs) == 0:
+                elif self.utils.enable_fake_perception and len(self.utils.near_cs) == 0:
                         self.utils.near_cs.append([0, -0.4, 0.6])
                         break
-                    else:
-                        reposition_counter += 1
+                else:
+                    reposition_counter += 1
                 
             # If no cornstalks are found at any angle, reposition
             if reposition_counter == len(angle_list):
