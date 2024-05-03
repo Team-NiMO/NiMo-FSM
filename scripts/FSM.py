@@ -35,7 +35,7 @@ class Utils:
         if self.enable_navigation:
             self.near_cs = [1] # Initialized so that navigation advances to waypoint instead of reposition
         else:
-            self.near_cs = [0]
+            self.near_cs = []
 
         # Setup data file
         try:
@@ -219,7 +219,7 @@ class global_navigate(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['success','error',''])
+                            outcomes = ['success','error','restart'])
         
         self.utils = utils
     
@@ -335,7 +335,7 @@ class find_cornstalk(smach.State):
                 if outcome.success == "ERROR":
                     rospy.logerr("LookAtAngle failed")
                     return 'error'
-                
+
                 # Check for cornstalks
                 if self.utils.enable_perception:
                     outcome = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
@@ -348,10 +348,13 @@ class find_cornstalk(smach.State):
                         return 'error'
                     else:
                         reposition_counter += 1
-                # Create a fake cornstalk detection
-                elif self.utils.enable_fake_perception:
-                    self.utils.near_cs.append([0, -0.4, 0.6])
-                    break
+                # Create a fake cornstalk detection if it hasn't already been done
+                if self.utils.enable_fake_perception:
+                    if len(self.utils.near_cs) == 0:
+                        self.utils.near_cs.append([0, -0.4, 0.6])
+                        break
+                    else:
+                        reposition_counter += 1
                 
             # If no cornstalks are found at any angle, reposition
             if reposition_counter == len(angle_list):
@@ -722,7 +725,7 @@ class FSM:
         with start_state:
 
             smach.StateMachine.add('Global_Navigate',global_navigate(self.utils),
-                                transitiosn = {'success':'Finding_Cornstalk',
+                                transitions = {'success':'Finding_Cornstalk',
                                                'error':'stop',
                                                'restart':'Navigate'})
 
