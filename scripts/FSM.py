@@ -29,10 +29,13 @@ class Utils:
         self.services()
 
         # Initialize internal variables
-        self.near_cs = [1] # Initialized so that navigation advances to waypoint instead of reposition
         self.threshold = 0.1
         self.insertion_ang = None
         self.sensor_fail_num = 0
+        if self.enable_navigation:
+            self.near_cs = [1] # Initialized so that navigation advances to waypoint instead of reposition
+        else:
+            self.near_cs = [0]
 
         # Setup data file
         try:
