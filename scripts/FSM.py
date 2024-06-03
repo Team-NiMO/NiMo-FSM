@@ -23,7 +23,7 @@ class Utils:
         # Load parameters from configuration file
         self.loadConfig()
 
-        if self.verbose: rospy.loginfo("Starting nimo_fsm node")
+        if self.verbose: rospy.loginfo("Starting nimo_fsm node for JL gripper")
 
         # Load services
         self.services()
