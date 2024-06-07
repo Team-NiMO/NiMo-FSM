@@ -82,7 +82,7 @@ class Utils:
             if self.verbose: rospy.loginfo("Waiting for perception services")
             try:
                 rospy.wait_for_service('GetWidth', timeout=1)
-                rospy.wait_for_service('Stalks', timeout=1)
+                rospy.wait_for_service('GetStalks', timeout=1)
                 self.GetWidthService = rospy.ServiceProxy('GetWidth', GetWidth)
                 self.GetStalksService = rospy.ServiceProxy('GetStalks', GetStalks)
             except Exception as e:
@@ -304,7 +304,8 @@ class find_cornstalk(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['success','error','reposition'])
+                            outcomes = ['success','error','reposition'],
+                            input_keys = ['state_1_input'])
         self.utils = utils
         self.width_ang = []
         
