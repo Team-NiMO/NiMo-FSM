@@ -94,6 +94,7 @@ class Utils:
             if self.verbose: rospy.loginfo("Waiting for manipulation services")
             try:
                 rospy.wait_for_service('GoHome', timeout=1)
+                rospy.wait_for_service('GoStow', timeout=1)
                 rospy.wait_for_service('LookatCorn', timeout=1)
                 rospy.wait_for_service('LookatAngle', timeout=1)
                 rospy.wait_for_service('GoCorn', timeout=1)
@@ -103,6 +104,7 @@ class Utils:
                 rospy.wait_for_service('UnhookCorn', timeout=1)
                 rospy.wait_for_service('GoEM', timeout=1)
                 self.GoHomeService = rospy.ServiceProxy('GoHome', GoHome)
+                self.GoStowService = rospy.ServiceProxy('GoStow', GoStow)
                 self.LookatCornService = rospy.ServiceProxy('LookatCorn', LookatCorn)
                 self.LookatAngleService = rospy.ServiceProxy('LookatAngle', LookatAngle)
                 self.GoCornService = rospy.ServiceProxy('GoCorn', GoCorn)
@@ -226,6 +228,14 @@ class global_navigate(smach.State):
     def execute(self, userdata):
         if self.utils.verbose: rospy.loginfo("----- Entering Global Navigation State -----")
 
+        # Moving to the stow arm position
+        if self.utils.enable_manipulation:
+            if self.utils.verbose: rospy.loginfo("Calling GoStow")
+            outcome = self.utils.GoStowService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoStow failed.")
+                return 'error'
+        
         if self.utils.enable_navigation:
             outcome = rospy.get_param('/global_nav_stat')
 
@@ -259,6 +269,13 @@ class navigate(smach.State):
         if self.utils.verbose: rospy.loginfo("----- Entering Navigation State -----")
 
         # TODO: STOW ARM
+        if self.utils.enable_manipulation:
+            # Moving the arm to stow position
+            if self.utils.verbose: rospy.loginfo("Calling GoStow")
+            outcome = self.utils.GoStowService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoStow failed.")
+                return 'error'
 
         if self.utils.enable_navigation:
             # Call Planner to reposition if no cornstalks are found
@@ -390,8 +407,9 @@ class find_cornstalk(smach.State):
                 if self.utils.verbose: rospy.loginfo("Calling GetWidth")
                 GetWidthOutput = self.utils.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
                 if GetWidthOutput.success == "ERROR":
-                    rospy.logerr("GetWidth failed")
-                    return 'error'
+                    rospy.logerr("GetWidth failed. Reposing the robot.")
+                    # return 'error'
+                    return 'reposition'
                 
                 width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
             else:
@@ -411,8 +429,9 @@ class find_cornstalk(smach.State):
                     if self.utils.verbose: rospy.loginfo("Calling GetWidth")
                     GetWidthOutput = self.utils.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
                     if GetWidthOutput.success == "ERROR":
-                        rospy.logerr("GetWidth failed")
-                        return 'error'
+                        rospy.logerr("GetWidth failed. Reposing the robot.")
+                        # return 'error'
+                        return 'reposition'
                     
                     width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
                 else:
