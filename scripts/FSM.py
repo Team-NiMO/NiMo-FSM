@@ -82,7 +82,7 @@ class Utils:
             if self.verbose: rospy.loginfo("Waiting for perception services")
             try:
                 rospy.wait_for_service('GetWidth', timeout=1)
-                rospy.wait_for_service('Stalks', timeout=1)
+                rospy.wait_for_service('GetStalks', timeout=1)
                 self.GetWidthService = rospy.ServiceProxy('GetWidth', GetWidth)
                 self.GetStalksService = rospy.ServiceProxy('GetStalks', GetStalks)
             except Exception as e:
@@ -304,7 +304,8 @@ class find_cornstalk(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['success','error','reposition'])
+                            outcomes = ['success','error','reposition'],
+                            input_keys = ['state_1_input'])
         self.utils = utils
         self.width_ang = []
         
@@ -468,12 +469,13 @@ class clean_calibrate(smach.State):
                 return 'error'
             
             # Extend the linear actuator
-            if self.utils.enable_end_effector and self.utils.clean_extend:
-                if self.utils.verbose: rospy.loginfo("Calling ActLinear Extend")
-                outcome = self.utils.ActLinearService("extend")
-                if outcome.success == "ERROR":
-                    rospy.logerr("ActLinear Extend failed")
-                    return 'error'
+            # Janice's gripper does not need to be extended for cleaning 
+            # if self.utils.enable_end_effector and self.utils.clean_extend:
+            #     if self.utils.verbose: rospy.loginfo("Calling ActLinear Extend")
+            #     outcome = self.utils.ActLinearService("extend")
+            #     if outcome.success == "ERROR":
+            #         rospy.logerr("ActLinear Extend failed")
+            #         return 'error'
                 
             # Move the end effector to the cleaning pump
             if self.utils.verbose: rospy.loginfo("Calling GoEM Clean")
@@ -564,12 +566,12 @@ class clean_calibrate(smach.State):
                 rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
 
             # Retract the linear actuator
-            if self.utils.enable_end_effector and self.utils.clean_extend:
-                if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")
-                outcome = self.utils.ActLinearService("retract")
-                if outcome.success == "ERROR":
-                    rospy.logerr("ActLinear Retract failed")
-                    return 'error'
+            # if self.utils.enable_end_effector and self.utils.clean_extend:
+            #     if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")
+            #     outcome = self.utils.ActLinearService("retract")
+            #     if outcome.success == "ERROR":
+            #         rospy.logerr("ActLinear Retract failed")
+            #         return 'error'
 
             # Reset the arm
             if self.utils.verbose: rospy.loginfo("Calling GoHome")
@@ -624,14 +626,14 @@ class insert(smach.State):
                 # Extend the linear actuator
                 if self.utils.verbose: rospy.loginfo("Calling ActLinear Extend")
                 outcome = self.utils.ActLinearService("extend")
-                if outcome.success == "ERROR":
+                if outcome.flag == "ERROR":
                     rospy.logerr("ActLinear Extend failed")
                     return 'error'
                 
                 # Collect Nitrate data
                 if self.utils.verbose: rospy.loginfo("Calling GetDat")
                 outcome = self.utils.GetDatService()
-                if outcome.success == "ERROR":
+                if outcome.flag == "ERROR":
                     rospy.logerr("GetDat failed")
                     self.utils.sensor_fail_num += 1
                 else:
@@ -643,16 +645,17 @@ class insert(smach.State):
                 
                 # Write the time, position, and nitrate value to file
                 time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H:%M:%S")
-                pose_str = "{}, {}".format(self.utils.current_pose.position.x, self.utils.current_pose.position.y)
+                # pose_str = "{}, {}".format(self.utils.current_pose.position.x, self.utils.current_pose.position.y)
                 f = open(self.utils.package_path+"/output/RUN{}.csv".format(self.utils.run_index), "a")
                 if self.utils.verbose: rospy.loginfo("Writing nitrate value {} PPM to RUN{}.csv".format(120, self.utils.run_index))
-                f.write(time_str+","+pose_str+","+"{}\n".format(120))
+                # f.write(time_str+","+pose_str+","+"{}\n".format(120))
+                f.write(time_str+","+","+"{}\n".format(120))
                 f.close()
 
                 # Retract the linear actuator
                 if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")
                 outcome = self.utils.ActLinearService("retract")
-                if outcome.success == "ERROR":
+                if outcome.flag == "ERROR":
                     rospy.logerr("ActLinear Retract failed")
                     return 'error'
 
@@ -697,7 +700,7 @@ class replace(smach.State):
                 if self.utils.enable_end_effector:
                     if self.utils.verbose: rospy.loginfo("Calling ActLinear Extend")
                     outcome = self.utils.ActLinearService("extend")
-                    if outcome.success == "ERROR":
+                    if outcome.flag == "ERROR":
                         rospy.logerr("ActLinear Extend failed")
                         return 'error'
                 

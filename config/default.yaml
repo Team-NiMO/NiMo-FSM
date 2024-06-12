@@ -5,7 +5,7 @@ debug:
   enable_perception: True
   enable_manipulation: True
   enable_end_effector: True
-  enable_external_mechanisms: True 
+  enable_external_mechanisms: False 
   enable_navigation: True
 
   enable_fake_perception: False # For testing purposes, create a fake cornstalk detection
