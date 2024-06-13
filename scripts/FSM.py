@@ -95,6 +95,7 @@ class Utils:
             try:
                 rospy.wait_for_service('GoHome', timeout=1)
                 rospy.wait_for_service('GoStow', timeout=1)
+                rospy.wait_for_service('GoScan', timeout=1)
                 rospy.wait_for_service('LookatCorn', timeout=1)
                 rospy.wait_for_service('LookatAngle', timeout=1)
                 rospy.wait_for_service('GoCorn', timeout=1)
@@ -105,6 +106,7 @@ class Utils:
                 rospy.wait_for_service('GoEM', timeout=1)
                 self.GoHomeService = rospy.ServiceProxy('GoHome', GoHome)
                 self.GoStowService = rospy.ServiceProxy('GoStow', GoStow)
+                self.GoScanService = rospy.ServiceProxy('GoScan', GoScan)
                 self.LookatCornService = rospy.ServiceProxy('LookatCorn', LookatCorn)
                 self.LookatAngleService = rospy.ServiceProxy('LookatAngle', LookatAngle)
                 self.GoCornService = rospy.ServiceProxy('GoCorn', GoCorn)
@@ -331,18 +333,18 @@ class find_cornstalk(smach.State):
 
         if self.utils.enable_manipulation:
             # Reset the arm
-            if self.utils.verbose: rospy.loginfo("Calling GoHome")
-            outcome = self.utils.GoHomeService()
+            if self.utils.verbose: rospy.loginfo("Calling GoScan")
+            outcome = self.utils.GoScanService()
             if outcome.success == "ERROR":
-                rospy.logerr("GoHome failed")
+                rospy.logerr("GoScan failed")
                 return 'error'
 
             # Look at the cornstalk
-            if self.utils.verbose: rospy.loginfo("Calling LookatCorn")
-            outcome = self.utils.LookatCornService()
-            if outcome.success == "ERROR":
-                rospy.logerr("LookatCorn failed")
-                return 'error'
+            # if self.utils.verbose: rospy.loginfo("Calling LookatCorn")
+            # outcome = self.utils.LookatCornService()
+            # if outcome.success == "ERROR":
+            #     rospy.logerr("LookatCorn failed")
+            #     return 'error'
 
             # Rotate the end effector left and right to view cornstalks
             reposition_counter = 0
@@ -377,10 +379,10 @@ class find_cornstalk(smach.State):
                 if self.utils.verbose: rospy.loginfo("No cornstalks found nearby")
                 return 'reposition'
             
-            if self.utils.verbose: rospy.loginfo("Calling GoHome")
-            outcome = self.utils.GoHomeService()
+            if self.utils.verbose: rospy.loginfo("Calling GoScan")
+            outcome = self.utils.GoScanService()
             if outcome.success == "ERROR":
-                rospy.logerr("GoHome failed")
+                rospy.logerr("GoScan failed")
                 return 'error'
             
             # Move to stalk for inspection
@@ -397,7 +399,7 @@ class find_cornstalk(smach.State):
             # Go to minimum angle
             width_ang = []
             if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
-            ArcMoveOutput = self.utils.ArcCornService(relative_angle=-30)
+            ArcMoveOutput = self.utils.ArcCornService(relative_angle=-15)
             if ArcMoveOutput.success == "ERROR":
                 rospy.logerr("GoCorn failed")
                 return 'error'
@@ -416,7 +418,7 @@ class find_cornstalk(smach.State):
                 width_ang.append((0, ArcMoveOutput.absolute_angle))
 
             # Check other angles for width
-            for i in range(4):
+            for i in range(2):
                 # Go to next angle
                 if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
                 ArcMoveOutput = self.utils.ArcCornService(relative_angle=15)
@@ -446,7 +448,7 @@ class find_cornstalk(smach.State):
             # Return to 0 angle
             width_ang = []
             if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
-            outcome = self.utils.ArcCornService(relative_angle=-30)
+            outcome = self.utils.ArcCornService(relative_angle=-15)
             if outcome.success == "ERROR":
                 rospy.logerr("GoCorn failed")
                 return 'error'
@@ -480,6 +482,13 @@ class clean_calibrate(smach.State):
         if self.utils.verbose: rospy.loginfo("----- Entering Clean Calibrate State -----")
 
         if self.utils.enable_manipulation:
+
+            if self.utils.verbose: rospy.loginfo("Calling GoScan")
+            outcome = self.utils.GoScanService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoScan failed")
+                return 'error'
+            
             # Reset the arm
             if self.utils.verbose: rospy.loginfo("Calling GoHome")
             outcome = self.utils.GoHomeService()
@@ -598,6 +607,12 @@ class clean_calibrate(smach.State):
             if outcome.success == "ERROR":
                 rospy.logerr("GoHome failed")
                 return 'error'
+            
+            if self.utils.verbose: rospy.loginfo("Calling GoScan")
+            outcome = self.utils.GoScanService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoScan failed")
+                return 'error'
 
         return 'success'
 
@@ -624,10 +639,10 @@ class insert(smach.State):
 
         if self.utils.enable_manipulation:
             # Reset the arm
-            if self.utils.verbose: rospy.loginfo("Calling GoHome")
-            outcome = self.utils.GoHomeService()
+            if self.utils.verbose: rospy.loginfo("Calling GoScan")
+            outcome = self.utils.GoScanService()
             if outcome.success == "ERROR":
-                rospy.logerr("GoHome failed")
+                rospy.logerr("GoScan failed")
                 return 'error'
             
             # Hook Stalk
