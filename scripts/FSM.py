@@ -327,7 +327,7 @@ class find_cornstalk(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['success','error','reposition'],
+                            outcomes = ['success','error','reposition', 'next'],
                             input_keys = ['state_1_input'])
         self.utils = utils
         self.width_ang = []
@@ -416,11 +416,9 @@ class find_cornstalk(smach.State):
                 if self.utils.verbose: rospy.loginfo("Calling GetWidth")
                 GetWidthOutput = self.utils.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
                 if GetWidthOutput.success == "ERROR":
-                    rospy.logerr("GetWidth failed. Reposing the robot.")
-                    return 'error'
-                    # return 'reposition'
-                
-                width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
+                    rospy.logerr("GetWidth failed. Moving to next angle")
+                else:
+                    width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
             else:
                 width_ang.append((0, ArcMoveOutput.absolute_angle))
 
@@ -438,22 +436,13 @@ class find_cornstalk(smach.State):
                     if self.utils.verbose: rospy.loginfo("Calling GetWidth")
                     GetWidthOutput = self.utils.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
                     if GetWidthOutput.success == "ERROR":
-                        rospy.logerr("GetWidth failed. Reposing the robot.")
-                        return 'error'
-                        # return 'reposition'
-                    
-                    width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
+                        rospy.logerr("GetWidth failed. Moving to next angle")
+                    else:
+                        width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
                 else:
                     width_ang.append((0, ArcMoveOutput.absolute_angle))
 
-            max_pair = max(width_ang, key = lambda x:x[0])
-            self.utils.insertion_ang = max_pair[1]
-            if self.utils.verbose:
-                rospy.loginfo("Width Angle list is: {}".format(width_ang))
-                rospy.loginfo("Maximum insertion angle is {}".format(self.utils.insertion_ang))
-
             # Return to 0 angle
-            width_ang = []
             if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
             outcome = self.utils.ArcCornService(relative_angle=-15)
             if outcome.success == "ERROR":
@@ -464,6 +453,16 @@ class find_cornstalk(smach.State):
             outcome = self.utils.UngoCornService()
             if outcome.success == "ERROR":
                 rospy.logerr("UngoCorn failed")
+
+            if len(width_ang) == 0:
+                rospy.logerr("GetWidth failed on every angle. Move to next stalk")
+                return 'next'
+
+            max_pair = max(width_ang, key = lambda x:x[0])
+            self.utils.insertion_ang = max_pair[1]
+            if self.utils.verbose:
+                rospy.loginfo("Width Angle list is: {}".format(width_ang))
+                rospy.loginfo("Maximum insertion angle is {}".format(self.utils.insertion_ang))
 
         return 'success'
 
@@ -779,6 +778,7 @@ class FSM:
             smach.StateMachine.add('Finding_Cornstalk',find_cornstalk(self.utils),
                                 transitions = {'success':'Cleaning_Calibrating',
                                                'error':'stop',
+                                               'next':'Finding_Cornstalk',
                                                'reposition':'Navigate'},
                                 remapping = {'state_1_input':'find_stalk'})
             
