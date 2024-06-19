@@ -9,6 +9,7 @@ import yaml
 import rospkg
 import os
 import datetime
+import time
 
 from nimo_perception.srv import *
 from nimo_manipulation.srv import *
@@ -65,6 +66,7 @@ class Utils:
         self.enable_end_effector = config["debug"]["enable_end_effector"]
         self.enable_external_mechanisms = config["debug"]["enable_external_mechanisms"]
         self.enable_navigation = config["debug"]["enable_navigation"]
+        self.enable_arc_corn = config["debug"]["enable_arc_corn"]
 
         # Fake perception cannot be enabled if real perception is
         self.enable_fake_perception = config["debug"]["enable_fake_perception"] and not self.enable_perception
@@ -346,7 +348,7 @@ class find_cornstalk(smach.State):
 
             # Rotate the end effector left and right to view cornstalks
             reposition_counter = 0
-            angle_list = [-30, 0, 30]
+            angle_list = [0, -30, 30]
             for angle in angle_list:
                 # Rotate end effector while looking at stalk
                 outcome = self.utils.LookatAngleService(joint_angle=angle)
@@ -377,49 +379,28 @@ class find_cornstalk(smach.State):
                 if self.utils.verbose: rospy.loginfo("No cornstalks found nearby")
                 return 'reposition'
             
-            if self.utils.verbose: rospy.loginfo("Calling GoHome")
-            outcome = self.utils.GoHomeService()
-            if outcome.success == "ERROR":
-                rospy.logerr("GoHome failed")
-                return 'error'
-            
-            # Move to stalk for inspection
-            current_stalk = Point(x = self.utils.near_cs[-1][0],
-                                y = self.utils.near_cs[-1][1],
-                                z = self.utils.near_cs[-1][2])
-
-            if self.utils.verbose: rospy.loginfo("Calling GoCorn")
-            outcome = self.utils.GoCornService(grasp_point = current_stalk)
-            if outcome.success == "ERROR":
-                rospy.logerr("GoCorn failed")
-                return 'error'
-            
-            # Go to minimum angle
-            width_ang = []
-            if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
-            ArcMoveOutput = self.utils.ArcCornService(relative_angle=-30)
-            if ArcMoveOutput.success == "ERROR":
-                rospy.logerr("GoCorn failed")
-                return 'error'
-            
-            # Get Width
-            if self.utils.enable_perception:
-                if self.utils.verbose: rospy.loginfo("Calling GetWidth")
-                GetWidthOutput = self.utils.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
-                if GetWidthOutput.success == "ERROR":
-                    rospy.logerr("GetWidth failed. Moving to next angle")
-                else:
-                    width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
+            if self.utils.enable_arc_corn:
+                if self.utils.verbose: rospy.loginfo("Calling GoHome")
+                outcome = self.utils.GoHomeService()
+                if outcome.success == "ERROR":
+                    rospy.logerr("GoHome failed")
+                    return 'error'
                 
-                width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
-            else:
-                width_ang.append((0, ArcMoveOutput.absolute_angle))
+                # Move to stalk for inspection
+                current_stalk = Point(x = self.utils.near_cs[-1][0],
+                                    y = self.utils.near_cs[-1][1],
+                                    z = self.utils.near_cs[-1][2])
 
-            # Check other angles for width
-            for i in range(4):
-                # Go to next angle
+                if self.utils.verbose: rospy.loginfo("Calling GoCorn")
+                outcome = self.utils.GoCornService(grasp_point = current_stalk)
+                if outcome.success == "ERROR":
+                    rospy.logerr("GoCorn failed")
+                    return 'error'
+                
+                # Go to minimum angle
+                width_ang = []
                 if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
-                ArcMoveOutput = self.utils.ArcCornService(relative_angle=15)
+                ArcMoveOutput = self.utils.ArcCornService(relative_angle=-30)
                 if ArcMoveOutput.success == "ERROR":
                     rospy.logerr("GoCorn failed")
                     return 'error'
@@ -437,27 +418,51 @@ class find_cornstalk(smach.State):
                 else:
                     width_ang.append((0, ArcMoveOutput.absolute_angle))
 
-            # Return to 0 angle
-            if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
-            outcome = self.utils.ArcCornService(relative_angle=-30)
-            if outcome.success == "ERROR":
-                rospy.logerr("GoCorn failed")
-                return 'error'
-            
-            if self.utils.verbose: rospy.loginfo("Calling UngoCorn")
-            outcome = self.utils.UngoCornService()
-            if outcome.success == "ERROR":
-                rospy.logerr("UngoCorn failed")
+                # Check other angles for width
+                for i in range(4):
+                    # Go to next angle
+                    if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
+                    ArcMoveOutput = self.utils.ArcCornService(relative_angle=15)
+                    if ArcMoveOutput.success == "ERROR":
+                        rospy.logerr("GoCorn failed")
+                        return 'error'
+                    
+                    # Get Width
+                    if self.utils.enable_perception:
+                        if self.utils.verbose: rospy.loginfo("Calling GetWidth")
+                        GetWidthOutput = self.utils.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
+                        if GetWidthOutput.success == "ERROR":
+                            rospy.logerr("GetWidth failed. Moving to next angle")
+                        else:
+                            width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
+                        
+                        width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
+                    else:
+                        width_ang.append((0, ArcMoveOutput.absolute_angle))
 
-            if len(width_ang) == 0:
-                rospy.logerr("GetWidth failed on every angle. Move to next stalk")
-                return 'next'
+                # Return to 0 angle
+                if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
+                outcome = self.utils.ArcCornService(relative_angle=-30)
+                if outcome.success == "ERROR":
+                    rospy.logerr("GoCorn failed")
+                    return 'error'
+                
+                if self.utils.verbose: rospy.loginfo("Calling UngoCorn")
+                outcome = self.utils.UngoCornService()
+                if outcome.success == "ERROR":
+                    rospy.logerr("UngoCorn failed")
 
-            max_pair = max(width_ang, key = lambda x:x[0])
-            self.utils.insertion_ang = max_pair[1]
-            if self.utils.verbose:
-                rospy.loginfo("Width Angle list is: {}".format(width_ang))
-                rospy.loginfo("Maximum insertion angle is {}".format(self.utils.insertion_ang))
+                if len(width_ang) == 0:
+                    rospy.logerr("GetWidth failed on every angle. Move to next stalk")
+                    return 'next'
+
+                max_pair = max(width_ang, key = lambda x:x[0])
+                self.utils.insertion_ang = max_pair[1]
+                if self.utils.verbose:
+                    rospy.loginfo("Width Angle list is: {}".format(width_ang))
+                    rospy.loginfo("Maximum insertion angle is {}".format(self.utils.insertion_ang))
+            else:
+                self.utils.insertion_ang = 0
 
         return 'success'
 
@@ -515,6 +520,7 @@ class clean_calibrate(smach.State):
                 
                 # Wait for 15s before turning pumps off
                 rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
+                time.sleep(15)
 
             # Move the end effector to the low calibration pump
             if self.utils.verbose: rospy.loginfo("Calling GoEM Low Calibration")
@@ -538,14 +544,14 @@ class clean_calibrate(smach.State):
                 if self.utils.enable_end_effector:
                     if self.utils.verbose: rospy.loginfo("Calling GetCalDat Low Calibration")
                     outcome = self.utils.GetCalDatService("cal_low")
-                    if outcome.success == "ERROR":
+                    if outcome.flag == "ERROR":
                         rospy.logerr("GetCalDat Low Calibration failed")
                         return 'error'
                     
             # Move the end effector to the high calibration pump
             if self.utils.verbose: rospy.loginfo("Calling GoEM High Calibration")
             outcome = self.utils.GoEMService("cal_high")
-            if outcome.success == "ERROR":
+            if outcome.flag == "ERROR":
                 rospy.logerr("GoEM High Calibration failed")
                 return 'error'
 
@@ -585,6 +591,7 @@ class clean_calibrate(smach.State):
                 
                 # Wait for 15s before turning pumps off
                 rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
+                time.sleep(15)
 
             # Retract the linear actuator
             if self.utils.enable_end_effector and self.utils.clean_extend:
@@ -659,18 +666,17 @@ class insert(smach.State):
                     self.utils.sensor_fail_num += 1
                 else:
                     self.utils.sensor_fail_num = 0
+                    # Write the time, position, and nitrate value to file
+                    time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H:%M:%S")
+                    # pose_str = "{}, {}".format(self.utils.current_pose.position.x, self.utils.current_pose.position.y)
+                    f = open(self.utils.package_path+"/output/RUN{}.csv".format(self.utils.run_index), "a")
+                    if self.utils.verbose: rospy.loginfo("Writing nitrate value {} PPM to RUN{}.csv".format(outcome.nitrate_val, self.utils.run_index))
+                    f.write(time_str+","+","+","+"{}\n".format(outcome.nitrate_val))
+                    f.close()
 
                 # Replace sensor if it has failed N times in a row
                 if self.utils.sensor_fail_num == self.utils.sensor_fail_threshold:
                     return 'replace'
-                
-                # Write the time, position, and nitrate value to file
-                time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H:%M:%S")
-                pose_str = "{}, {}".format(self.utils.current_pose.position.x, self.utils.current_pose.position.y)
-                f = open(self.utils.package_path+"/output/RUN{}.csv".format(self.utils.run_index), "a")
-                if self.utils.verbose: rospy.loginfo("Writing nitrate value {} PPM to RUN{}.csv".format(120, self.utils.run_index))
-                f.write(time_str+","+pose_str+","+"{}\n".format(120))
-                f.close()
 
                 # Retract the linear actuator
                 if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")
