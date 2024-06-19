@@ -72,6 +72,7 @@ In separate terminals, run each of the following commands. If the workspace has 
 roslaunch nimo_perception StalkDetect.launch
 roslaunch nimo_manipulation nimo_manipulation.launch
 rosrun nimo_end_effector nitrate_sample.py
+rqt --force-discover
 rosrun act_pump actp.py
 rosrun NiMo-FSM FSM.py
 ```
