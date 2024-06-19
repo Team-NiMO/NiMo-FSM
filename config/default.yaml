@@ -9,6 +9,7 @@ debug:
   enable_navigation: False 
 
   enable_fake_perception: False # For testing purposes, create a fake cornstalk detection
+  enable_arc_corn: True
 
 sensor:
   sensor_fail_threshold: 3      # Number of consecutive sensor fails before replacement
