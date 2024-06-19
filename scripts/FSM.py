@@ -213,6 +213,10 @@ class Utils:
             outcome = self.ControlPumpsService("pumpsoff")
             if outcome.success == "ERROR":
                 rospy.logerr("ControlPumps Off failed")
+    
+    # def cornstalk_in_reach(stalk_list):
+    #     for i in range(len(stalk_list)):
+
 
 # State 0: Global Navigate
 class global_navigate(smach.State):
@@ -293,13 +297,13 @@ class navigate(smach.State):
                 input.data = True
                 outcome = self.utils.PlanningService(input)
 
-                while not outcome.found_plan and outcome.more_waypoints:
+                while not outcome.planner_resp and outcome.more_waypoints:
                     rospy.logwarn("Planner failed, trying next waypoint")
                     outcome = self.utils.PlanningService(input)
 
-                if not outcome.more_waypoints:
-                    if self.utils.verbose: rospy.logwarn("No more waypoints")
-                    return 'stop'
+                # if not outcome.more_waypoints:
+                #     if self.utils.verbose: rospy.logwarn("No more waypoints")
+                #     return 'stop'
 
             # Wait for navigation to complete
             if self.utils.verbose: rospy.loginfo("Waiting for navigation to complete...")
@@ -369,7 +373,7 @@ class find_cornstalk(smach.State):
 
                 # Create a fake cornstalk detection if it hasn't already been done
                 elif self.utils.enable_fake_perception and len(self.utils.near_cs) == 0:
-                        self.utils.near_cs.append([0, -0.4, 0.6])
+                        self.utils.near_cs.append([0.1, -0.381, 0.75])
                         break
                 else:
                     reposition_counter += 1
@@ -389,6 +393,9 @@ class find_cornstalk(smach.State):
             current_stalk = Point(x = self.utils.near_cs[-1][0],
                                 y = self.utils.near_cs[-1][1],
                                 z = self.utils.near_cs[-1][2])
+            # current_stalk = Point(x = self.utils.near_cs[-1][0],
+            #                     y = self.utils.near_cs[-1][1],
+            #                     z = 0.7)
 
             if self.utils.verbose: rospy.loginfo("Calling GoCorn")
             outcome = self.utils.GoCornService(grasp_point = current_stalk)
@@ -410,8 +417,8 @@ class find_cornstalk(smach.State):
                 GetWidthOutput = self.utils.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
                 if GetWidthOutput.success == "ERROR":
                     rospy.logerr("GetWidth failed. Reposing the robot.")
-                    # return 'error'
-                    return 'reposition'
+                    return 'error'
+                    # return 'reposition'
                 
                 width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
             else:
@@ -432,8 +439,8 @@ class find_cornstalk(smach.State):
                     GetWidthOutput = self.utils.GetWidthService(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
                     if GetWidthOutput.success == "ERROR":
                         rospy.logerr("GetWidth failed. Reposing the robot.")
-                        # return 'error'
-                        return 'reposition'
+                        return 'error'
+                        # return 'reposition'
                     
                     width_ang.append((GetWidthOutput.width, ArcMoveOutput.absolute_angle))
                 else:

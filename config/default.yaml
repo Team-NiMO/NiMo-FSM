@@ -4,7 +4,7 @@ debug:
   # Enable or disable subsystems for testing
   enable_perception: True
   enable_manipulation: True
-  enable_end_effector: True
+  enable_end_effector: False
   enable_external_mechanisms: False 
   enable_navigation: False 
 
