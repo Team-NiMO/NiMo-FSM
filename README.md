@@ -71,7 +71,7 @@ In separate terminals, run each of the following commands. If the workspace has 
 ```
 roslaunch nimo_perception StalkDetect.launch
 roslaunch nimo_manipulation nimo_manipulation.launch
-roslaunch nimo_end_effector nimo_end_effector.launch
+rosrun nimo_end_effector nitrate_sample.py
 rosrun act_pump actp.py
 rosrun NiMo-FSM FSM.py
 ```
