@@ -9,6 +9,7 @@ import yaml
 import rospkg
 import os
 import datetime
+import time
 
 from nimo_perception.srv import *
 from nimo_manipulation.srv import *
@@ -353,7 +354,7 @@ class find_cornstalk(smach.State):
 
             # Rotate the end effector left and right to view cornstalks
             reposition_counter = 0
-            angle_list = [-30, 0, 30]
+            angle_list = [0, -30, 30]
             for angle in angle_list:
                 # Rotate end effector while looking at stalk
                 outcome = self.utils.LookatAngleService(joint_angle=angle)
@@ -532,6 +533,7 @@ class clean_calibrate(smach.State):
                 
                 # Wait for 15s before turning pumps off
                 rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
+                time.sleep(15)
 
             # Move the end effector to the low calibration pump
             if self.utils.verbose: rospy.loginfo("Calling GoEM Low Calibration")
@@ -555,7 +557,7 @@ class clean_calibrate(smach.State):
                 if self.utils.enable_end_effector:
                     if self.utils.verbose: rospy.loginfo("Calling GetCalDat Low Calibration")
                     outcome = self.utils.GetCalDatService("cal_low")
-                    if outcome.success == "ERROR":
+                    if outcome.flag == "ERROR":
                         rospy.logerr("GetCalDat Low Calibration failed")
                         return 'error'
                     
@@ -581,7 +583,7 @@ class clean_calibrate(smach.State):
                 if self.utils.enable_end_effector:
                     if self.utils.verbose: rospy.loginfo("Calling GetCalDat High Calibration")
                     outcome = self.utils.GetCalDatService("cal_high")
-                    if outcome.success == "ERROR":
+                    if outcome.flag == "ERROR":
                         rospy.logerr("GetCalDat High Calibration failed")
                         return 'error'
                     
@@ -602,6 +604,7 @@ class clean_calibrate(smach.State):
                 
                 # Wait for 15s before turning pumps off
                 rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
+                time.sleep(15)
 
             # Retract the linear actuator
             # if self.utils.enable_end_effector and self.utils.clean_extend:
@@ -682,19 +685,18 @@ class insert(smach.State):
                     self.utils.sensor_fail_num += 1
                 else:
                     self.utils.sensor_fail_num = 0
+                    # Write the time, position, and nitrate value to file
+                    time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H:%M:%S")
+                    # pose_str = "{}, {}".format(self.utils.current_pose.position.x, self.utils.current_pose.position.y)
+                    f = open(self.utils.package_path+"/output/RUN{}.csv".format(self.utils.run_index), "a")
+                    if self.utils.verbose: rospy.loginfo("Writing nitrate value {} PPM to RUN{}.csv".format(outcome.nitrate_val, self.utils.run_index))
+                    # f.write(time_str+","+pose_str+","+"{}\n".format(120))
+                    f.write(time_str+","+","+","+"{}\n".format(outcome.nitrate_val))
+                    f.close()
 
                 # Replace sensor if it has failed N times in a row
                 if self.utils.sensor_fail_num == self.utils.sensor_fail_threshold:
                     return 'replace'
-                
-                # Write the time, position, and nitrate value to file
-                time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H:%M:%S")
-                # pose_str = "{}, {}".format(self.utils.current_pose.position.x, self.utils.current_pose.position.y)
-                f = open(self.utils.package_path+"/output/RUN{}.csv".format(self.utils.run_index), "a")
-                if self.utils.verbose: rospy.loginfo("Writing nitrate value {} PPM to RUN{}.csv".format(120, self.utils.run_index))
-                # f.write(time_str+","+pose_str+","+"{}\n".format(120))
-                f.write(time_str+","+","+"{}\n".format(120))
-                f.close()
 
                 # Retract the linear actuator
                 if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")
