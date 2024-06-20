@@ -33,6 +33,8 @@ class Utils:
         self.threshold = 0.1
         self.insertion_ang = None
         self.sensor_fail_num = 0
+        self.inserts = 0
+        self.sensor_limit = 2
         if self.enable_navigation:
             self.near_cs = [1] # Initialized so that navigation advances to waypoint instead of reposition
         else:
@@ -712,6 +714,8 @@ class insert(smach.State):
                 rospy.logerr("Unhook failed")
                 return 'error'
                 
+        self.inserts += 1
+        if self.inserts % self.sensor_limit == 0 and self.inserts < 24: return 'replace'
         return 'success'
 
 # State 5: Replace
@@ -732,10 +736,10 @@ class replace(smach.State):
 
         if self.utils.enable_manipulation:
             # Reset the arm
-            if self.utils.verbose: rospy.loginfo("Calling GoHome")
-            outcome = self.utils.GoHomeService()
+            if self.utils.verbose: rospy.loginfo("Calling GoStow")
+            outcome = self.utils.GoStowService()
             if outcome.success == "ERROR":
-                rospy.logerr("GoHome failed")
+                rospy.logerr("GoStow failed")
                 return 'error'
 
             # If manual replacement, stop the system
@@ -754,7 +758,39 @@ class replace(smach.State):
             
             # If automatic replacement, try finding more cornstalks
             elif self.utils.sensor_replacement == "auto":
-                # TODO: Call auto replacement service
+
+                # Taking the current sensor inside out 
+                if self.utils.enable_end_effector:
+                    if self.utils.verbose: rospy.loginfo("Calling ActLinear Unload")
+                    outcome = self.utils.ActLinearService("unload")
+                    if outcome.flag == "ERROR":
+                        rospy.logerr("ActLinear Unload failed")
+                        return 'error'
+                
+                # Moving to the RM slots
+                if self.utils.verbose: rospy.loginfo("Calling GoRM")
+                outcome = self.utils.GoRMService("0")
+                if outcome.success == "ERROR":
+                    rospy.logerr("GoRM failed")
+                    return 'error'
+                
+                # Loading a new sensor into the gripper
+                if self.utils.enable_end_effector:
+                    if self.utils.verbose: rospy.loginfo("Calling ActLinear Load")
+                    outcome = self.utils.ActLinearService("load")
+                    if outcome.flag == "ERROR":
+                        rospy.logerr("ActLinear Load failed")
+                        return 'error'
+                    
+                # Moving back to Stow position
+                if self.utils.enable_manipulation:
+                    # Reset the arm
+                    if self.utils.verbose: rospy.loginfo("Calling GoStow")
+                    outcome = self.utils.GoStowService()
+                    if outcome.success == "ERROR":
+                        rospy.logerr("GoStow failed")
+                        return 'error'
+
                 # TODO: Call end effector motions
                 return 'success'
 
