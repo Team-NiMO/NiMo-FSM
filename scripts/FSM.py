@@ -395,12 +395,12 @@ class find_cornstalk(smach.State):
                     return 'error'
                 
                 # Move to stalk for inspection
-                current_stalk = Point(x = self.utils.near_cs[-1][0],
-                                    y = self.utils.near_cs[-1][1],
-                                    z = self.utils.near_cs[-1][2])
                 # current_stalk = Point(x = self.utils.near_cs[-1][0],
                 #                     y = self.utils.near_cs[-1][1],
-                #                     z = 0.7)
+                #                     z = self.utils.near_cs[-1][2])
+                current_stalk = Point(x = self.utils.near_cs[-1][0],
+                                    y = self.utils.near_cs[-1][1],
+                                    z = 0.795)
 
                 if self.utils.verbose: rospy.loginfo("Calling GoCorn")
                 outcome = self.utils.GoCornService(grasp_point = current_stalk)
@@ -660,10 +660,13 @@ class insert(smach.State):
                 rospy.logerr("GoScan failed")
                 return 'error'
             
-            # Hook Stalk
+            # # Hook Stalk
+            # current_stalk = Point(x = self.utils.near_cs[-1][0],
+            #                       y = self.utils.near_cs[-1][1],
+            #                       z = self.utils.near_cs[-1][2])
             current_stalk = Point(x = self.utils.near_cs[-1][0],
                                   y = self.utils.near_cs[-1][1],
-                                  z = self.utils.near_cs[-1][2])
+                                  z = 0.795)
             
             if self.utils.verbose: rospy.loginfo("Calling HookCorn")
             outcome = self.utils.HookCornService(grasp_point = current_stalk, insert_angle = self.utils.insertion_ang)
@@ -715,7 +718,9 @@ class insert(smach.State):
                 return 'error'
                 
         self.inserts += 1
-        if self.inserts % self.sensor_limit == 0 and self.inserts < 24: return 'replace'
+        if self.inserts % self.sensor_limit == 0 and self.inserts < 24: 
+            rospy.logerr("Need to replace sensor")
+            return 'error'
         return 'success'
 
 # State 5: Replace
