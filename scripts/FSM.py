@@ -168,8 +168,8 @@ class Utils:
             if (flag == "DONE"):
 
                 for i, point in enumerate(grasp_points):
-                    grasp_coordinates = (point.position.x, point.position.y, point.position.z)
-                    print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={point.position.z}")
+                    grasp_coordinates = (point.position.x, point.position.y, 0.8)
+                    print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={0.8}")
                     new = True
 
                     if bool(self.near_cs):
@@ -348,36 +348,35 @@ class find_cornstalk(smach.State):
 
             # Rotate the end effector left and right to view cornstalks
             reposition_counter = 0
-            angle_list = [0, -30, 30]
-            for angle in angle_list:
-                # Rotate end effector while looking at stalk
-                outcome = self.utils.LookatAngleService(joint_angle=angle)
-                if outcome.success == "ERROR":
-                    rospy.logerr("LookAtAngle failed")
+            # angle_list = [0, -30, 30]
+            # for angle in angle_list:
+            #     # Rotate end effector while looking at stalk
+            #     outcome = self.utils.LookatAngleService(joint_angle=angle)
+            #     if outcome.success == "ERROR":
+            #         rospy.logerr("LookAtAngle failed")
+            #         return 'error'
+
+            # Check for cornstalks
+            if self.utils.enable_perception:
+                outcome = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
+                if outcome == "REPOSITION":
+                    if self.utils.verbose: rospy.loginfo("No cornstalks found nearby")
+                
+                    # Reset the arm
+                    if self.utils.verbose: rospy.loginfo("Calling GoHome")
+                    outcome = self.utils.GoHomeService()
+                    if outcome.success == "ERROR":
+                        rospy.logerr("GoHome failed")
+                        return 'error'
+                    
+                    return 'reposition'
+                elif outcome == "ERROR":
+                    rospy.logerr("GetStalks failed")
                     return 'error'
 
-                # Check for cornstalks
-                if self.utils.enable_perception:
-                    outcome = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
-                    if outcome == "SUCCESS":
-                        break
-                    elif outcome == "REPOSITION":
-                        reposition_counter += 1
-                    elif outcome == "ERROR":
-                        rospy.logerr("GetStalks failed")
-                        return 'error'
-
-                # Create a fake cornstalk detection if it hasn't already been done
-                elif self.utils.enable_fake_perception and len(self.utils.near_cs) == 0:
-                        self.utils.near_cs.append([0, -0.4, 0.6])
-                        break
-                else:
-                    reposition_counter += 1
-                
-            # If no cornstalks are found at any angle, reposition
-            if reposition_counter == len(angle_list):
-                if self.utils.verbose: rospy.loginfo("No cornstalks found nearby")
-                return 'reposition'
+            # Create a fake cornstalk detection if it hasn't already been done
+            elif self.utils.enable_fake_perception and len(self.utils.near_cs) == 0:
+                    self.utils.near_cs.append([0, -0.4, 0.6])
             
             if self.utils.enable_arc_corn:
                 if self.utils.verbose: rospy.loginfo("Calling GoHome")
@@ -400,7 +399,7 @@ class find_cornstalk(smach.State):
                 # Go to minimum angle
                 width_ang = []
                 if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
-                ArcMoveOutput = self.utils.ArcCornService(relative_angle=-30)
+                ArcMoveOutput = self.utils.ArcCornService(relative_angle=-15)
                 if ArcMoveOutput.success == "ERROR":
                     rospy.logerr("GoCorn failed")
                     return 'error'
@@ -419,7 +418,7 @@ class find_cornstalk(smach.State):
                     width_ang.append((0, ArcMoveOutput.absolute_angle))
 
                 # Check other angles for width
-                for i in range(4):
+                for i in range(2):
                     # Go to next angle
                     if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
                     ArcMoveOutput = self.utils.ArcCornService(relative_angle=15)
@@ -442,7 +441,7 @@ class find_cornstalk(smach.State):
 
                 # Return to 0 angle
                 if self.utils.verbose: rospy.loginfo("Calling ArcCorn")
-                outcome = self.utils.ArcCornService(relative_angle=-30)
+                outcome = self.utils.ArcCornService(relative_angle=-15)
                 if outcome.success == "ERROR":
                     rospy.logerr("GoCorn failed")
                     return 'error'
@@ -453,8 +452,9 @@ class find_cornstalk(smach.State):
                     rospy.logerr("UngoCorn failed")
 
                 if len(width_ang) == 0:
-                    rospy.logerr("GetWidth failed on every angle. Move to next stalk")
-                    return 'next'
+                    rospy.logerr("GetWidth failed on every angle. Continuing at angle 0")
+                    self.utils.insertion_ang = 0
+                    return 'success'
 
                 max_pair = max(width_ang, key = lambda x:x[0])
                 self.utils.insertion_ang = max_pair[1]
@@ -551,7 +551,7 @@ class clean_calibrate(smach.State):
             # Move the end effector to the high calibration pump
             if self.utils.verbose: rospy.loginfo("Calling GoEM High Calibration")
             outcome = self.utils.GoEMService("cal_high")
-            if outcome.flag == "ERROR":
+            if outcome.success == "ERROR":
                 rospy.logerr("GoEM High Calibration failed")
                 return 'error'
 
@@ -570,7 +570,7 @@ class clean_calibrate(smach.State):
                 if self.utils.enable_end_effector:
                     if self.utils.verbose: rospy.loginfo("Calling GetCalDat High Calibration")
                     outcome = self.utils.GetCalDatService("cal_high")
-                    if outcome.success == "ERROR":
+                    if outcome.flag == "ERROR":
                         rospy.logerr("GetCalDat High Calibration failed")
                         return 'error'
                     
@@ -661,7 +661,7 @@ class insert(smach.State):
                 # Collect Nitrate data
                 if self.utils.verbose: rospy.loginfo("Calling GetDat")
                 outcome = self.utils.GetDatService()
-                if outcome.success == "ERROR":
+                if outcome.flag == "ERROR":
                     rospy.logerr("GetDat failed")
                     self.utils.sensor_fail_num += 1
                 else:
