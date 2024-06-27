@@ -29,6 +29,9 @@ class Utils:
         # Load services
         self.services()
 
+        # variables (offsets seen on the field)
+        self.x_offset = 0.0
+
         # Initialize internal variables
         self.threshold = 0.1
         self.insertion_ang = None
@@ -247,7 +250,7 @@ class global_navigate(smach.State):
                 return 'error'
         
         if self.utils.enable_navigation:
-            outcome = rospy.get_param('/global_nav_stat')
+            outcome = rospy.get_param('global_nav_stat')
 
             # If global_nav_stat is false, already in field -> navigate to next waypoint
             if not outcome:
@@ -256,7 +259,8 @@ class global_navigate(smach.State):
             
             # Otherwise, wait for navigation to complete
             if self.utils.verbose: rospy.loginfo("Waiting for global navigation to complete...")
-            while not rospy.get_param('/nav_stat'): pass
+            while not rospy.get_param('nav_stat'): pass
+            rospy.set_param('nav_stat', False)
             
         return 'success'
             
@@ -311,8 +315,10 @@ class navigate(smach.State):
 
             # Wait for navigation to complete
             if self.utils.verbose: rospy.loginfo("Waiting for navigation to complete...")
-            while not rospy.get_param('/nav_stat'): pass
-
+            rospy.logwarn(rospy.get_param('nav_stat'))
+            rospy.set_param('nav_stat', False)
+            while not rospy.get_param('nav_stat'): pass
+            
             # Reset cornstalk list
             # NOTE: Since the cornstalks are stored in the frame of the arm, they need to be reset after moving the base
             self.utils.near_cs = []
@@ -348,11 +354,11 @@ class find_cornstalk(smach.State):
                 return 'error'
 
             # Look at the cornstalk
-            # if self.utils.verbose: rospy.loginfo("Calling LookatCorn")
-            # outcome = self.utils.LookatCornService()
-            # if outcome.success == "ERROR":
-            #     rospy.logerr("LookatCorn failed")
-            #     return 'error'
+            if self.utils.verbose: rospy.loginfo("Calling LookatCorn")
+            outcome = self.utils.LookatCornService()
+            if outcome.success == "ERROR":
+                rospy.logerr("LookatCorn failed")
+                return 'error'
 
             # Rotate the end effector left and right to view cornstalks
             reposition_counter = 0
@@ -362,6 +368,8 @@ class find_cornstalk(smach.State):
                 outcome = self.utils.LookatAngleService(joint_angle=angle)
                 if outcome.success == "ERROR":
                     rospy.logerr("LookAtAngle failed")
+                    if self.utils.verbose: rospy.loginfo("Returning to Scan Position")
+                    outcome = self.utils.GoScanService()
                     return 'error'
 
                 # Check for cornstalks
@@ -373,6 +381,8 @@ class find_cornstalk(smach.State):
                         reposition_counter += 1
                     elif outcome == "ERROR":
                         rospy.logerr("GetStalks failed")
+                        if self.utils.verbose: rospy.loginfo("Returning to Scan Position")
+                        outcome = self.utils.GoScanService()
                         return 'error'
 
                 # Create a fake cornstalk detection if it hasn't already been done
@@ -384,7 +394,10 @@ class find_cornstalk(smach.State):
                 
             # If no cornstalks are found at any angle, reposition
             if reposition_counter == len(angle_list):
-                if self.utils.verbose: rospy.loginfo("No cornstalks found nearby")
+                if self.utils.verbose: 
+                    rospy.loginfo("No cornstalks found nearby")
+                    rospy.loginfo("Returning to Scan Position")
+                outcome = self.utils.GoScanService()
                 return 'reposition'
             
             if self.utils.enable_arc_corn:
@@ -398,7 +411,7 @@ class find_cornstalk(smach.State):
                 # current_stalk = Point(x = self.utils.near_cs[-1][0],
                 #                     y = self.utils.near_cs[-1][1],
                 #                     z = self.utils.near_cs[-1][2])
-                current_stalk = Point(x = self.utils.near_cs[-1][0],
+                current_stalk = Point(x = self.utils.near_cs[-1][0] + self.utils.x_offset,
                                     y = self.utils.near_cs[-1][1],
                                     z = 0.795)
 
@@ -461,10 +474,12 @@ class find_cornstalk(smach.State):
 
                 if len(width_ang) == 0:
                     rospy.logerr("GetWidth failed on every angle. Move to next stalk")
-                    return 'next'
+                    self.utils.insertion_ang = 0
 
-                max_pair = max(width_ang, key = lambda x:x[0])
-                self.utils.insertion_ang = max_pair[1]
+                    # return 'next'
+                else:
+                    max_pair = max(width_ang, key = lambda x:x[0])
+                    self.utils.insertion_ang = max_pair[1]
                 if self.utils.verbose:
                     rospy.loginfo("Width Angle list is: {}".format(width_ang))
                     rospy.loginfo("Maximum insertion angle is {}".format(self.utils.insertion_ang))
@@ -664,7 +679,7 @@ class insert(smach.State):
             # current_stalk = Point(x = self.utils.near_cs[-1][0],
             #                       y = self.utils.near_cs[-1][1],
             #                       z = self.utils.near_cs[-1][2])
-            current_stalk = Point(x = self.utils.near_cs[-1][0],
+            current_stalk = Point(x = self.utils.near_cs[-1][0] + self.utils.x_offset,
                                   y = self.utils.near_cs[-1][1],
                                   z = 0.795)
             
@@ -717,10 +732,10 @@ class insert(smach.State):
                 rospy.logerr("Unhook failed")
                 return 'error'
                 
-        self.inserts += 1
-        if self.inserts % self.sensor_limit == 0 and self.inserts < 24: 
-            rospy.logerr("Need to replace sensor")
-            return 'error'
+        self.utils.inserts += 1
+        # if self.utils.inserts % self.utils.sensor_limit == 0 and self.utils.inserts < 24: 
+        #     rospy.logerr("Need to replace sensor")
+        #     return 'error'
         return 'success'
 
 # State 5: Replace
