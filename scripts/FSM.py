@@ -168,7 +168,7 @@ class Utils:
             if (flag == "DONE"):
 
                 for i, point in enumerate(grasp_points):
-                    grasp_coordinates = (point.position.x, point.position.y, 0.8)
+                    grasp_coordinates = (point.position.x, point.position.y, 0.77)
                     print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={0.8}")
                     new = True
 
@@ -303,6 +303,7 @@ class navigate(smach.State):
 
             # Wait for navigation to complete
             if self.utils.verbose: rospy.loginfo("Waiting for navigation to complete...")
+            rospy.set_param('/nav_stat', False)
             while not rospy.get_param('/nav_stat'): pass
 
             # Reset cornstalk list
