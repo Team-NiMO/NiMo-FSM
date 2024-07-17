@@ -220,10 +220,6 @@ class Utils:
             outcome = self.ControlPumpsService("pumpsoff")
             if outcome.success == "ERROR":
                 rospy.logerr("ControlPumps Off failed")
-    
-    # def cornstalk_in_reach(stalk_list):
-    #     for i in range(len(stalk_list)):
-
 
 # State 0: Global Navigate
 class global_navigate(smach.State):
@@ -674,12 +670,30 @@ class insert(smach.State):
             if outcome.success == "ERROR":
                 rospy.logerr("GoScan failed")
                 return 'error'
+
+            # Approach the cornstalk
+            if self.utils.verbose: rospy.loginfo("Calling GoCorn")
+            outcome = self.utils.GoCornService(grasp_point = current_stalk)
+            if outcome.success == "ERROR":
+                rospy.logerr("GoCorn failed")
+                return 'error'
             
-            # # Hook Stalk
-            # current_stalk = Point(x = self.utils.near_cs[-1][0],
-            #                       y = self.utils.near_cs[-1][1],
-            #                       z = self.utils.near_cs[-1][2])
-            current_stalk = Point(x = self.utils.near_cs[-1][0] + self.utils.x_offset,
+            if self.utils.enable_perception:
+                # Look for the closest cornstalk
+                if self.utils.verbose: rospy.loginfo("Calling GetStalks")
+                outcome = self.utils.GetStalksService(num_frames=3, timeout=10.0)
+                if outcome.success == "ERROR":
+                    rospy.logerr("GetStalks failed")
+                    return 'error'
+                if outcome.success == "REPOSITION":
+                    rospy.logerr("Stalk not detected")
+                    new_x = self.utils.near_cs[-1][0]
+                else:
+                    # NOTE: For now assuming only grasp point returned is stalk of interest
+                    new_x = outcome.grasp_points[0].position.x
+
+            # Hook Stalk
+            current_stalk = Point(x = new_x,
                                   y = self.utils.near_cs[-1][1],
                                   z = 0.795)
             
@@ -731,6 +745,11 @@ class insert(smach.State):
             if outcome.success == "ERROR":
                 rospy.logerr("Unhook failed")
                 return 'error'
+            
+            if self.utils.verbose: rospy.loginfo("Calling UngoCorn")
+            outcome = self.utils.UngoCornService()
+            if outcome.success == "ERROR":
+                rospy.logerr("UngoCorn failed")
                 
         self.utils.inserts += 1
         # if self.utils.inserts % self.utils.sensor_limit == 0 and self.utils.inserts < 24: 
