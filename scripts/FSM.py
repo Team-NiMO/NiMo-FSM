@@ -409,7 +409,7 @@ class find_cornstalk(smach.State):
                 #                     z = self.utils.near_cs[-1][2])
                 current_stalk = Point(x = self.utils.near_cs[-1][0] + self.utils.x_offset,
                                     y = self.utils.near_cs[-1][1],
-                                    z = 0.795)
+                                    z = 0.76)
 
                 if self.utils.verbose: rospy.loginfo("Calling GoCorn")
                 outcome = self.utils.GoCornService(grasp_point = current_stalk)
@@ -672,6 +672,10 @@ class insert(smach.State):
                 return 'error'
 
             # Approach the cornstalk
+            current_stalk = Point(x = self.utils.near_cs[-1][0],
+                                  y = self.utils.near_cs[-1][1],
+                                  z = 0.76)
+            
             if self.utils.verbose: rospy.loginfo("Calling GoCorn")
             outcome = self.utils.GoCornService(grasp_point = current_stalk)
             if outcome.success == "ERROR":
@@ -695,7 +699,7 @@ class insert(smach.State):
             # Hook Stalk
             current_stalk = Point(x = new_x,
                                   y = self.utils.near_cs[-1][1],
-                                  z = 0.795)
+                                  z = 0.76)
             
             if self.utils.verbose: rospy.loginfo("Calling HookCorn")
             outcome = self.utils.HookCornService(grasp_point = current_stalk, insert_angle = self.utils.insertion_ang)
