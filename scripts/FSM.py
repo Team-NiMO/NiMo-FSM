@@ -847,6 +847,11 @@ class FSM:
                                                'restart':'Navigate'})
 
             smach.StateMachine.add('Navigate',navigate(self.utils),
+                                transitions = {'success':'Replace',
+                                               'error':'stop',
+                                               'stop':'stop'})
+            
+            smach.StateMachine.add('Replace',replace(self.utils),
                                 transitions = {'success':'Finding_Cornstalk',
                                                'error':'stop',
                                                'stop':'stop'})
@@ -867,11 +872,6 @@ class FSM:
                                 transitions = {'success':'Navigate',
                                                'error':'stop',
                                                'replace':'Replace'})
-            
-            smach.StateMachine.add('Replace',replace(self.utils),
-                                transitions = {'success':'Finding_Cornstalk',
-                                               'error':'stop',
-                                               'stop':'stop'})
         
         sis = smach_ros.IntrospectionServer('server_name', start_state, '/nimo_fsm')
         sis.start()
