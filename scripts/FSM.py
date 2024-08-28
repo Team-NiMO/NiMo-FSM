@@ -35,9 +35,10 @@ class Utils:
         # Initialize internal variables
         self.threshold = 0.1
         self.insertion_ang = None
-        self.sensor_fail_num = 0
+        self.sensor_insert_num = 0
         self.inserts = 0
-        self.sensor_limit = 2
+        self.curr_sensor_slot = 5
+        self.sensor_limit = 1  # change how frequent sensor swapping should be
         if self.enable_navigation:
             self.near_cs = [1] # Initialized so that navigation advances to waypoint instead of reposition
         else:
@@ -111,6 +112,7 @@ class Utils:
                 rospy.wait_for_service('HookCorn', timeout=1)
                 rospy.wait_for_service('UnhookCorn', timeout=1)
                 rospy.wait_for_service('GoEM', timeout=1)
+                rospy.wait_for_service('GoRM', timeout=1)
                 self.GoHomeService = rospy.ServiceProxy('GoHome', GoHome)
                 self.GoStowService = rospy.ServiceProxy('GoStow', GoStow)
                 self.GoScanService = rospy.ServiceProxy('GoScan', GoScan)
@@ -122,6 +124,7 @@ class Utils:
                 self.HookCornService = rospy.ServiceProxy('HookCorn', HookCorn)
                 self.UnhookCornService = rospy.ServiceProxy('UnhookCorn', UnhookCorn)
                 self.GoEMService = rospy.ServiceProxy('GoEM', GoEM)
+                self.GoRMService = rospy.ServiceProxy('GoRM', GoRM)
             except Exception as e:
                 rospy.logerr("Unable to load manipulation services")
                 raise e
@@ -743,6 +746,12 @@ class insert(smach.State):
                     rospy.logerr("ActLinear Retract failed")
                     return 'error'
 
+                self.utils.inserts += 1
+                if self.utils.inserts % self.utils.sensor_limit == 0 and self.curr_sensor_slot > 1:
+                    self.curr_sensor_slot -= 1 
+                    rospy.logerr("Need to replace sensor")
+                    return 'replace'
+                
             # Reset the arm
             if self.utils.verbose: rospy.loginfo("Calling Unhook")
             outcome = self.utils.UnhookCornService()
@@ -755,10 +764,7 @@ class insert(smach.State):
             if outcome.success == "ERROR":
                 rospy.logerr("UngoCorn failed")
                 
-        self.utils.inserts += 1
-        # if self.utils.inserts % self.utils.sensor_limit == 0 and self.utils.inserts < 24: 
-        #     rospy.logerr("Need to replace sensor")
-        #     return 'error'
+        
         return 'success'
 
 # State 5: Replace
@@ -791,16 +797,23 @@ class replace(smach.State):
                 
                 # Extend the linear actuator
                 if self.utils.enable_end_effector:
-                    if self.utils.verbose: rospy.loginfo("Calling ActLinear Extend")
-                    outcome = self.utils.ActLinearService("extend")
+                    if self.utils.verbose: rospy.loginfo("Calling ActLinear Unload")
+                    outcome = self.utils.ActLinearService("unload")
                     if outcome.flag == "ERROR":
-                        rospy.logerr("ActLinear Extend failed")
+                        rospy.logerr("ActLinear Unload failed")
                         return 'error'
                 
                 return 'stop'
             
             # If automatic replacement, try finding more cornstalks
             elif self.utils.sensor_replacement == "auto":
+
+                # Moving to the RM slot 0 for sensor removal 
+                if self.utils.verbose: rospy.loginfo("Calling GoRM slot 0 for sensor removal")
+                outcome = self.utils.GoRMService("0")
+                if outcome.success == "ERROR":
+                    rospy.logerr("GoRM failed")
+                    return 'error'
 
                 # Taking the current sensor inside out 
                 if self.utils.enable_end_effector:
@@ -810,13 +823,14 @@ class replace(smach.State):
                         rospy.logerr("ActLinear Unload failed")
                         return 'error'
                 
-                # Moving to the RM slots
-                if self.utils.verbose: rospy.loginfo("Calling GoRM")
-                outcome = self.utils.GoRMService("0")
+                # Moving to a sensor slot for swapping
+                if self.utils.verbose: rospy.loginfo("Calling GoRM slot 0 for sensor removal")
+                slot = str(self.curr_sensor_slot)
+                outcome = self.utils.GoRMService(slot)
                 if outcome.success == "ERROR":
                     rospy.logerr("GoRM failed")
                     return 'error'
-                
+
                 # Loading a new sensor into the gripper
                 if self.utils.enable_end_effector:
                     if self.utils.verbose: rospy.loginfo("Calling ActLinear Load")
@@ -856,6 +870,11 @@ class FSM:
                                                'restart':'Navigate'})
 
             smach.StateMachine.add('Navigate',navigate(self.utils),
+                                transitions = {'success':'Replace',
+                                               'error':'stop',
+                                               'stop':'stop'})
+            
+            smach.StateMachine.add('Replace',replace(self.utils),
                                 transitions = {'success':'Finding_Cornstalk',
                                                'error':'stop',
                                                'stop':'stop'})
@@ -876,11 +895,6 @@ class FSM:
                                 transitions = {'success':'Navigate',
                                                'error':'stop',
                                                'replace':'Replace'})
-            
-            smach.StateMachine.add('Replace',replace(self.utils),
-                                transitions = {'success':'Finding_Cornstalk',
-                                               'error':'stop',
-                                               'stop':'stop'})
         
         sis = smach_ros.IntrospectionServer('server_name', start_state, '/nimo_fsm')
         sis.start()
