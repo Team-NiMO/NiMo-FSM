@@ -4,9 +4,9 @@ debug:
   # Enable or disable subsystems for testing
   enable_perception: True
   enable_manipulation: True
-  enable_end_effector: True
+  enable_end_effector: False
   enable_external_mechanisms: False 
-  enable_navigation: True 
+  enable_navigation: False 
 
   enable_fake_perception: False # For testing purposes, create a fake cornstalk detection
   enable_arc_corn: True
