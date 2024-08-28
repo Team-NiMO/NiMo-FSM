@@ -73,6 +73,7 @@ class Utils:
         self.enable_external_mechanisms = config["debug"]["enable_external_mechanisms"]
         self.enable_navigation = config["debug"]["enable_navigation"]
         self.enable_arc_corn = config["debug"]["enable_arc_corn"]
+        self.enable_replacement = config["debug"]["enable_replacement"]
 
         # Fake perception cannot be enabled if real perception is
         self.enable_fake_perception = config["debug"]["enable_fake_perception"] and not self.enable_perception
@@ -80,7 +81,6 @@ class Utils:
             rospy.logwarn("Real and Fake perception cannot both be enabled, defaulting to real perception")
 
         self.sensor_fail_threshold = config["sensor"]["sensor_fail_threshold"]
-
         self.sensor_replacement = config["gripper"]["replacement"]
         self.clean_extend = config["gripper"]["clean_extend"]
 
@@ -274,7 +274,7 @@ class navigate(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['success','error','stop'])
+                            outcomes = ['success', 'replace', 'error','stop'])
         
         self.utils = utils
     
@@ -322,7 +322,101 @@ class navigate(smach.State):
             # NOTE: Since the cornstalks are stored in the frame of the arm, they need to be reset after moving the base
             self.utils.near_cs = []
 
+
+        if self.utils.inserts % self.utils.sensor_limit == 0 and self.curr_sensor_slot > 1:
+            rospy.logerr("Need to replace sensor")
+            return 'replace'
+
         return 'success'
+    
+# State 2.5: Replace
+class replace(smach.State):
+    '''
+    Replace State
+    - Perform sensor replacement action
+    - Bring arm to stow position at the end
+    '''
+
+    def __init__(self, utils):
+        smach.State.__init__(self,
+                            outcomes = ['success', 'error', 'stop'])
+        self.utils = utils
+    
+    def execute(self):
+        if self.utils.verbose: rospy.loginfo("----- Entering Replace State -----")
+
+        if self.utils.enable_replacement:
+
+            if self.utils.enable_manipulation:
+                # Reset the arm
+                if self.utils.verbose: rospy.loginfo("Calling GoStow")
+                outcome = self.utils.GoStowService()
+                if outcome.success == "ERROR":
+                    rospy.logerr("GoStow failed")
+                    return 'error'
+
+                # If manual replacement, stop the system
+                if self.utils.sensor_replacement == "manual":
+                    # TODO: Call manual replacement service
+   
+                
+                    # Extend the linear actuator
+                    if self.utils.enable_end_effector:
+                        if self.utils.verbose: rospy.loginfo("Calling ActLinear Unload")
+                        outcome = self.utils.ActLinearService("unload")
+                        if outcome.flag == "ERROR":
+                            rospy.logerr("ActLinear Unload failed")
+                            return 'error'
+                
+                    return 'stop'
+            
+                # If automatic replacement, try finding more cornstalks
+                elif self.utils.sensor_replacement == "auto":
+
+                    # Moving to the RM slot 0 for sensor removal 
+                    if self.utils.verbose: rospy.loginfo("Calling GoRM slot 0 for sensor removal")
+                    outcome = self.utils.GoRMService("0")
+                    if outcome.success == "ERROR":
+                        rospy.logerr("GoRM SLOT 0 failed")
+                        return 'error'
+
+                    # Taking the current sensor inside out 
+                    if self.utils.enable_end_effector:
+                        if self.utils.verbose: rospy.loginfo("Calling ActLinear Unload")
+                        outcome = self.utils.ActLinearService("unload")
+                        if outcome.flag == "ERROR":
+                            rospy.logerr("ActLinear Unload failed")
+                            return 'error'
+                
+                    # Moving to a sensor slot for swapping
+                    if self.utils.verbose: rospy.loginfo("Calling GoRM sensor slot for sensor loading")
+                    slot = str(self.curr_sensor_slot)
+                    outcome = self.utils.GoRMService(slot)
+                    if outcome.success == "ERROR":
+                        rospy.logerr("GoRM failed")
+                        return 'error'
+
+                    # Loading a new sensor into the gripper
+                    if self.utils.enable_end_effector:
+                        if self.utils.verbose: rospy.loginfo("Calling ActLinear Load")
+                        outcome = self.utils.ActLinearService("load")
+                        if outcome.flag == "ERROR":
+                            rospy.logerr("ActLinear Load failed")
+                            return 'error'
+                    
+                    # Moving back to Stow position
+                    if self.utils.enable_manipulation:
+                        # Reset the arm
+                        if self.utils.verbose: rospy.loginfo("Calling GoStow")
+                        outcome = self.utils.GoStowService()
+                        if outcome.success == "ERROR":
+                            rospy.logerr("GoStow failed")
+                            return 'error'
+
+                    self.curr_sensor_slot -= 1 
+                    return 'success'
+
+            return 'success'
 
 # State 2 - Finding Cornstalk
 class find_cornstalk(smach.State):
@@ -747,10 +841,7 @@ class insert(smach.State):
                     return 'error'
 
                 self.utils.inserts += 1
-                if self.utils.inserts % self.utils.sensor_limit == 0 and self.curr_sensor_slot > 1:
-                    self.curr_sensor_slot -= 1 
-                    rospy.logerr("Need to replace sensor")
-                    return 'replace'
+                
                 
             # Reset the arm
             if self.utils.verbose: rospy.loginfo("Calling Unhook")
@@ -767,91 +858,6 @@ class insert(smach.State):
         
         return 'success'
 
-# State 5: Replace
-class replace(smach.State):
-    '''
-    Replace State
-    - Bring arm to home position
-    - Perform replacement action
-    '''
-
-    def __init__(self, utils):
-        smach.State.__init__(self,
-                            outcomes = ['success', 'error', 'stop'])
-        self.utils = utils
-    
-    def execute(self):
-        if self.utils.verbose: rospy.loginfo("----- Entering Replace State -----")
-
-        if self.utils.enable_manipulation:
-            # Reset the arm
-            if self.utils.verbose: rospy.loginfo("Calling GoStow")
-            outcome = self.utils.GoStowService()
-            if outcome.success == "ERROR":
-                rospy.logerr("GoStow failed")
-                return 'error'
-
-            # If manual replacement, stop the system
-            if self.utils.sensor_replacement == "manual":
-                # TODO: Call manual replacement service
-                
-                # Extend the linear actuator
-                if self.utils.enable_end_effector:
-                    if self.utils.verbose: rospy.loginfo("Calling ActLinear Unload")
-                    outcome = self.utils.ActLinearService("unload")
-                    if outcome.flag == "ERROR":
-                        rospy.logerr("ActLinear Unload failed")
-                        return 'error'
-                
-                return 'stop'
-            
-            # If automatic replacement, try finding more cornstalks
-            elif self.utils.sensor_replacement == "auto":
-
-                # Moving to the RM slot 0 for sensor removal 
-                if self.utils.verbose: rospy.loginfo("Calling GoRM slot 0 for sensor removal")
-                outcome = self.utils.GoRMService("0")
-                if outcome.success == "ERROR":
-                    rospy.logerr("GoRM failed")
-                    return 'error'
-
-                # Taking the current sensor inside out 
-                if self.utils.enable_end_effector:
-                    if self.utils.verbose: rospy.loginfo("Calling ActLinear Unload")
-                    outcome = self.utils.ActLinearService("unload")
-                    if outcome.flag == "ERROR":
-                        rospy.logerr("ActLinear Unload failed")
-                        return 'error'
-                
-                # Moving to a sensor slot for swapping
-                if self.utils.verbose: rospy.loginfo("Calling GoRM slot 0 for sensor removal")
-                slot = str(self.curr_sensor_slot)
-                outcome = self.utils.GoRMService(slot)
-                if outcome.success == "ERROR":
-                    rospy.logerr("GoRM failed")
-                    return 'error'
-
-                # Loading a new sensor into the gripper
-                if self.utils.enable_end_effector:
-                    if self.utils.verbose: rospy.loginfo("Calling ActLinear Load")
-                    outcome = self.utils.ActLinearService("load")
-                    if outcome.flag == "ERROR":
-                        rospy.logerr("ActLinear Load failed")
-                        return 'error'
-                    
-                # Moving back to Stow position
-                if self.utils.enable_manipulation:
-                    # Reset the arm
-                    if self.utils.verbose: rospy.loginfo("Calling GoStow")
-                    outcome = self.utils.GoStowService()
-                    if outcome.success == "ERROR":
-                        rospy.logerr("GoStow failed")
-                        return 'error'
-
-                # TODO: Call end effector motions
-                return 'success'
-
-        return 'error'
 
 class FSM:
     def __init__(self):
