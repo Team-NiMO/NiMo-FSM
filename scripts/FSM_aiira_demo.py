@@ -154,14 +154,14 @@ class Utils:
                 raise e
 
         # Load Navigation Services
-        if self.enable_navigation:
-            if self.verbose: rospy.loginfo("Waiting for external mechanisms services")
-            try:
-                rospy.wait_for_service('amiga_planner', timeout=1)
-                self.PlanningService = rospy.ServiceProxy('amiga_planner', planning_request_2)
-            except Exception as e:
-                rospy.logerr("Unable to load navigation services")
-                raise e
+        # if self.enable_navigation:
+        #     if self.verbose: rospy.loginfo("Waiting for external mechanisms services")
+        #     try:
+        #         rospy.wait_for_service('amiga_planner', timeout=1)
+        #         self.PlanningService = rospy.ServiceProxy('amiga_planner', planning_request_2)
+        #     except Exception as e:
+        #         rospy.logerr("Unable to load navigation services")
+        #         raise e
 
     def get_grasp (self, num_frames, timeout):
 
@@ -239,27 +239,27 @@ class global_navigate(smach.State):
     
     def execute(self, userdata):
         if self.utils.verbose: rospy.loginfo("----- Entering Global Navigation State -----")
-
+        rospy.set_param('pruning_status', False)
         # Moving to the stow arm position
-        if self.utils.enable_manipulation:
-            if self.utils.verbose: rospy.loginfo("Calling GoStow")
-            outcome = self.utils.GoStowService()
-            if outcome.success == "ERROR":
-                rospy.logerr("GoStow failed.")
-                return 'error'
+        # if self.utils.enable_manipulation:
+        #     if self.utils.verbose: rospy.loginfo("Calling GoStow")
+        #     outcome = self.utils.GoStowService()
+        #     if outcome.success == "ERROR":
+        #         rospy.logerr("GoStow failed.")
+        #         return 'error'
         
-        if self.utils.enable_navigation:
-            outcome = rospy.get_param('global_nav_stat')
+        # if self.utils.enable_navigation:
+        #     outcome = rospy.get_param('global_nav_stat')
 
-            # If global_nav_stat is false, already in field -> navigate to next waypoint
-            if not outcome:
-                if self.utils.verbose: rospy.loginfo("Restart detected, moving to next waypoint")
-                return 'restart'
+        #     # If global_nav_stat is false, already in field -> navigate to next waypoint
+        #     if not outcome:
+        #         if self.utils.verbose: rospy.loginfo("Restart detected, moving to next waypoint")
+        #         return 'restart'
             
-            # Otherwise, wait for navigation to complete
-            if self.utils.verbose: rospy.loginfo("Waiting for global navigation to complete...")
-            while not rospy.get_param('nav_stat'): pass
-            rospy.set_param('nav_stat', False)
+        #     # Otherwise, wait for navigation to complete
+        #     if self.utils.verbose: rospy.loginfo("Waiting for global navigation to complete...")
+        #     while not rospy.get_param('nav_stat'): pass
+        #     rospy.set_param('nav_stat', False)
             
         return 'success'
             
@@ -291,22 +291,24 @@ class navigate(smach.State):
                 return 'error'
 
         if self.utils.enable_navigation:
+            rospy.set_param('pruning_status', True)
             # Call Planner to reposition if no cornstalks are found
-            if len(self.utils.near_cs) == 0:
-                if self.utils.verbose: rospy.loginfo("Calling planner for reposition")
-                input = Bool()
-                input.data = False
-                outcome = self.utils.PlanningService(input)
-            # Call Planner to advance to next waypoint if cornstalks have been found
-            else:
-                if self.utils.verbose: rospy.loginfo("Calling planner for next waypoint")
-                input = Bool()
-                input.data = True
-                outcome = self.utils.PlanningService(input)
+            # if len(self.utils.near_cs) == 0:
+            #     if self.utils.verbose: rospy.loginfo("Calling planner for reposition")
+            #     input = Bool()
+            #     input.data = False
+            #     rospy.loginfo("No corn stalks detected!!")
+            #     # outcome = self.utils.PlanningService(input)
+            # # Call Planner to advance to next waypoint if cornstalks have been found
+            # else:
+            #     if self.utils.verbose: rospy.loginfo("Calling planner for next waypoint")
+            #     input = Bool()
+            #     input.data = True
+            #     outcome = self.utils.PlanningService(input)
 
-                while not outcome.planner_resp and outcome.more_waypoints:
-                    rospy.logwarn("Planner failed, trying next waypoint")
-                    outcome = self.utils.PlanningService(input)
+            #     while not outcome.planner_resp and outcome.more_waypoints:
+            #         rospy.logwarn("Planner failed, trying next waypoint")
+            #         outcome = self.utils.PlanningService(input)
 
                 # if not outcome.more_waypoints:
                 #     if self.utils.verbose: rospy.logwarn("No more waypoints")
@@ -342,7 +344,7 @@ class replace(smach.State):
     
     def execute(self, userdata):
         if self.utils.verbose: rospy.loginfo("----- Entering Replace State -----")
-
+        rospy.set_param('pruning_status', False)
         if self.utils.enable_replacement:
 
             rospy.loginfo(self.utils.inserts % self.utils.sensor_limit == 0)
@@ -839,7 +841,7 @@ class insert(smach.State):
 
                 # Replace sensor if it has failed N times in a row
                 # if self.utils.sensor_fail_num == self.utils.sensor_fail_threshold:
-                #     return 'replace'
+                    # return 'replace'
 
                 # Retract the linear actuator
                 if self.utils.verbose: rospy.loginfo("Calling ActLinear Retract")
@@ -850,6 +852,8 @@ class insert(smach.State):
 
                 self.utils.inserts += 1
                 
+            # self.utils.inserts += 1
+            # time.sleep(15)
                 
             # Reset the arm
             if self.utils.verbose: rospy.loginfo("Calling Unhook")
@@ -862,6 +866,12 @@ class insert(smach.State):
             outcome = self.utils.UngoCornService()
             if outcome.success == "ERROR":
                 rospy.logerr("UngoCorn failed")
+
+
+            if self.utils.inserts >= 3:
+                outcome = self.utils.GoStowService()
+                rospy.logerr("More than three insertions")
+                return 'error'
                 
         
         return 'success'
