@@ -1,0 +1,36 @@
+<launch>
+
+  <!-- <param name="/use_sim_time" value="false"/> -->
+  <arg name="outdir" />
+  <arg name="suffix" default="0" />
+  <node pkg="rosbag" type="record" name="data_logger" output="screen"
+	args=" -o $(arg outdir)/trial_$(arg suffix) --split --size=2000
+
+/camera/color/camera_info      
+/camera/color/image_raw           
+/camera/depth/camera_info     
+/camera/depth/image_rect_raw      
+/stalk_detect/viz/features 
+/stalk_detect/viz/grasp_points 
+/stalk_detect/viz/masks        
+/stalk_detect/viz/stalk_lines      
+/tf
+/tf_static 
+/xarm/joint_states    
+/xarm/xarm_states
+/joint_states
+/grasp_point
+/stalk_line
+/nit_val
+/rover/piksi/position_receiver_0/ros/baseline_ned
+/gps_enu
+/rover/piksi/position_receiver_0/sbp/pos_llh
+/odometry/filtered
+/visualization_path
+/local_goal_point
+
+"
+	/>
+  
+    
+</launch>

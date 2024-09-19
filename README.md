@@ -15,12 +15,16 @@ More information about the communication between the FSM and these subsystems is
 
 <img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/fsm.drawio.png" width="650">
 
-The overall flow of the FSM is motivated by the functional architecture shown below. The FSM is broken into five states:
-- `Navigation` - System idle while the base is navigating the cornfield [NOT IMPLEMENTED]
+The overall flow of the FSM is motivated by the functional architecture shown below. The FSM is broken into six states:
+- `Global` - Check whether it is necessary to navigate to field or continue to next waypoint
+    - `global_nav_stat` : True -> Global navigation in progress | False -> amiga already in field
+- `Navigation` - Navigate to next waypoint or delta step depending on cornstalk success
+    - `found_plan` : True -> Plan has been found | False -> Plan has not been found
+    - `more_waypoints` : True -> More waypoints exist | False -> All waypoints have been exhausted
 - `Finding_Cornstalk` - Detecting cornstalks in the area and selecting one to determine the optimal insertion side
 - `Cleaning_Calibrating` - Cleaning and calibrating the sensor to calibrate and check sensor functionality 
 - `Insertion` - Grasping the cornstalk, inserting the sensor, and taking readings from nitrate sensor
-- `Replace` - Depending on the end-effector, moving to manually or automatically replace a broken sensor [NOT IMPLEMENTED]
+- `Replace` - Depending on the end-effector, moving to manually or automatically replace a broken sensor
 
 <img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/IntegrationFunctional.drawio.png" width="650">
 
@@ -46,10 +50,12 @@ sudo apt-get install ros-noetic-smach-ros
 sudo apt-get install terminator
 ```
 
-Finally, move the [terminator config](/docs/config) to the terminator configuration folder. If you already have terminator configs, you will need to merge the `nimo` config with your existing config file.
+Move the [terminator config](/docs/config) to the terminator configuration folder. If you already have terminator configs, you will need to merge the `nimo` config with your existing config file.
 ```
 cp docs/config ~/.config/terminator/
 ```
+
+Finally, update the [configuration file](/config/default.yaml) if necessary.
 
 ## Use
 There are two methods to launch the system: 
@@ -84,14 +90,18 @@ Launching the system also starts two visualization tools:
 
 More information about these is detailed in the [Perception](https://github.com/Team-NiMO/NiMo-Perception_v2), [Manipulation](https://github.com/Team-NiMO/NiMo-Manipulation), and [End Effector](https://github.com/Team-NiMO/NiMo-EndEffector) repositories.
 
+## Other
+### Swapping End Effector
+For swapping end effectors, refer to [swap.md](/docs/swap.md).
+
 ## Common Issues
+**General Errors**
+
+All errors should appear on the FSM terminal, if the error is not with the FSM itself, determine which subsystem is causing an error and refer to the errors in that terminal for more details.
+
 **Terminal doesn't load properly**
 
 If terminator is not killed properly, the windows may not load in the correct configuration. If this is the case, kill terminator and restart.
-
-**`Waiting for services...`**
-
-This means that not all of the services are running. If this does not resolve after a few seconds, check the terminal windows to see if any of the subsystems are showing an error. If no system is showing an error, the [FSM node](/scripts/FSM.py) can be modified in line 100 to log which services are getting loaded and which are not.
 
 **Serial Port Issues**
 

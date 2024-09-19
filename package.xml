@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>NiMo-FSM</name>
+  <name>nimo_fsm</name>
   <version>0.0.0</version>
   <description>The NiMo-FSM package</description>
 

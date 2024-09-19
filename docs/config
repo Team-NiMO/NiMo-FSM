@@ -43,7 +43,7 @@
       profile = default
       title = FSM
       uuid = 849e3104-4537-4f74-b1e0-b8365e771b07
-      command = sleep 10;rosrun NiMo-FSM FSM.py;bash
+      command = sleep 10;rosrun nimo_fsm FSM.py;bash
     [[[terminal4]]]
       type = Terminal
       parent = child2
