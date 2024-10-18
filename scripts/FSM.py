@@ -2,7 +2,7 @@
 import numpy as np
 import rospy
 from geometry_msgs.msg import Point, Pose
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float32
 import smach
 import smach_ros
 import yaml
@@ -28,6 +28,9 @@ class Utils:
 
         # Load services
         self.services()
+
+        # Setup ROS publishers and subscribers
+        self.nitrateSample = rospy.Publisher('sampleVal', Float32, queue_size=10)
 
         # Initialize internal variables
         self.threshold = 0.1
@@ -685,10 +688,14 @@ class insert(smach.State):
                     # Write the time, position, and nitrate value to file
                     time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H:%M:%S")
                     # pose_str = "{}, {}".format(self.utils.current_pose.position.x, self.utils.current_pose.position.y)
-                    f = open(self.utils.package_path+"/output/RUN{}.csv".format(self.utils.run_index), "a")
-                    if self.utils.verbose: rospy.loginfo("Writing nitrate value {} PPM to RUN{}.csv".format(outcome.nitrate_val, self.utils.run_index))
-                    f.write(time_str+","+","+","+"{}\n".format(outcome.nitrate_val))
-                    f.close()
+                    
+                    # Publish nitrate reading
+                    self.utils.nitrateSample.publish(Float32(outcome.nit_val))
+
+                    # f = open(self.utils.package_path+"/output/RUN{}.csv".format(self.utils.run_index), "a")
+                    # if self.utils.verbose: rospy.loginfo("Writing nitrate value {} PPM to RUN{}.csv".format(outcome.nitrate_val, self.utils.run_index))
+                    # f.write(time_str+","+","+","+"{}\n".format(outcome.nitrate_val))
+                    # f.close()
 
                 # Replace sensor if it has failed N times in a row
                 if self.utils.sensor_fail_num == self.utils.sensor_fail_threshold:
