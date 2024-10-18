@@ -13,10 +13,10 @@ import time
 
 from nimo_perception.srv import *
 from nimo_manipulation.srv import *
-from nimo_end_effector.srv import *
-from act_pump.srv import *
+# from nimo_end_effector.srv import *
+# from act_pump.srv import *
 
-from amiga_path_planning.srv import *
+# from amiga_path_planning.srv import *
 
 class Utils:
 
@@ -66,6 +66,7 @@ class Utils:
         self.enable_end_effector = config["debug"]["enable_end_effector"]
         self.enable_external_mechanisms = config["debug"]["enable_external_mechanisms"]
         self.enable_navigation = config["debug"]["enable_navigation"]
+        self.enable_ui = config["debug"]["enable_ui"]
         self.enable_arc_corn = config["debug"]["enable_arc_corn"]
 
         # Fake perception cannot be enabled if real perception is
@@ -229,6 +230,20 @@ class global_navigate(smach.State):
     
     def execute(self, userdata):
         if self.utils.verbose: rospy.loginfo("----- Entering Global Navigation State -----")
+
+        if self.utils.enable_ui:
+            rospy.loginfo("Waiting for UI")
+            
+            try:
+                ui_stat = rospy.get_param('/ui_stat')
+            except:
+                ui_stat = False
+
+            while not ui_stat:
+                try:
+                    ui_stat = rospy.get_param('/ui_stat')
+                except:
+                    pass
 
         # Moving to the stow arm position
         if self.utils.enable_manipulation:
