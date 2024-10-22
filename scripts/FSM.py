@@ -370,7 +370,7 @@ class find_cornstalk(smach.State):
 
                 # Create a fake cornstalk detection if it hasn't already been done
                 elif self.utils.enable_fake_perception and len(self.utils.near_cs) == 0:
-                        self.utils.near_cs.append([0, -0.4, 0.6])
+                        self.utils.near_cs.append([-0.05, -0.6, 0.6])
 
                 else:
                     reposition_counter += 1
@@ -660,28 +660,28 @@ class insert(smach.State):
                 rospy.logerr("GoCorn failed")
                 return 'error'
             
-            # if self.utils.enable_perception:
-            #     diff = 999
-            #     trials = 0
-            #     while diff >= 0.003 and trials < 3:
-            #         if self.utils.verbose: rospy.loginfo("Calling GetRefinedGrasp")
-            #         outcome = self.utils.GetRefinedGraspService(num_frames = 3, timeout = 10.0, initial_grasp_point = current_stalk)
-            #         if outcome.success == "ERROR":
-            #             rospy.logerr("GetRefinedGrasp failed")
-            #             return 'error'
+            if self.utils.enable_perception:
+                diff = 999
+                trials = 0
+                while diff >= 0.003 and trials < 3:
+                    if self.utils.verbose: rospy.loginfo("Calling GetRefinedGrasp")
+                    outcome = self.utils.GetRefinedGraspService(num_frames = 3, timeout = 10.0, initial_grasp_point = current_stalk)
+                    if outcome.success == "ERROR":
+                        rospy.logerr("GetRefinedGrasp failed")
+                        return 'error'
                     
-            #         diff = np.linalg.norm(np.array([current_stalk.x, current_stalk.y]) - np.array([outcome.refined_grasp_point.x, outcome.refined_grasp_point.y]))
-            #         current_stalk = outcome.refined_grasp_point
+                    diff = np.linalg.norm(np.array([current_stalk.x, current_stalk.y]) - np.array([outcome.refined_grasp_point.x, outcome.refined_grasp_point.y]))
+                    current_stalk = outcome.refined_grasp_point
                     
-            #         rospy.loginfo("Refined difference = %.2f" % diff)
+                    rospy.loginfo("Refined difference = %.2f" % diff)
 
-            #         if self.utils.verbose: rospy.loginfo("Calling GoCorn")
-            #         outcome = self.utils.GoCornService(grasp_point = current_stalk)
-            #         if outcome.success == "ERROR":
-            #             rospy.logerr("GoCorn failed")
-            #             return 'error'
+                    if self.utils.verbose: rospy.loginfo("Calling GoCorn")
+                    outcome = self.utils.GoCornService(grasp_point = current_stalk)
+                    if outcome.success == "ERROR":
+                        rospy.logerr("GoCorn failed")
+                        return 'error'
 
-            #         trials += 1
+                    trials += 1
             
             if self.utils.verbose: rospy.loginfo("Calling HookCorn")
             outcome = self.utils.HookCornService(insert_angle = self.utils.insertion_ang)
@@ -807,7 +807,7 @@ class FSM:
                                                'stop':'stop'})
 
             smach.StateMachine.add('Finding_Cornstalk',find_cornstalk(self.utils),
-                                transitions = {'success':'Insertion',
+                                transitions = {'success':'Cleaning_Calibrating',
                                                'error':'stop',
                                                'next':'Finding_Cornstalk',
                                                'reposition':'Navigate'},
