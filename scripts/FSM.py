@@ -16,7 +16,7 @@ from nimo_manipulation.srv import *
 from nimo_end_effector.srv import *
 from act_pump.srv import *
 
-from amiga_path_planning.srv import *
+# from amiga_path_planning.srv import *
 
 class Utils:
 
@@ -416,7 +416,7 @@ class find_cornstalk(smach.State):
                 #                     z = self.utils.near_cs[-1][2])
                 current_stalk = Point(x = self.utils.near_cs[-1][0] + self.utils.x_offset,
                                     y = self.utils.near_cs[-1][1],
-                                    z = 0.795)
+                                    z = self.utils.near_cs[-1][2])
 
                 if self.utils.verbose: rospy.loginfo("Calling GoCorn")
                 outcome = self.utils.GoCornService(grasp_point = current_stalk)
@@ -684,7 +684,7 @@ class insert(smach.State):
             #                       z = self.utils.near_cs[-1][2])
             current_stalk = Point(x = self.utils.near_cs[-1][0] + self.utils.x_offset,
                                   y = self.utils.near_cs[-1][1],
-                                  z = 0.795)
+                                  z = self.utils.near_cs[-1][2])
             
             if self.utils.verbose: rospy.loginfo("Calling HookCorn")
             outcome = self.utils.HookCornService(grasp_point = current_stalk, insert_angle = self.utils.insertion_ang)
