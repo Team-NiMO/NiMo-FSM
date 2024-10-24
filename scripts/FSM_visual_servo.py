@@ -125,6 +125,7 @@ class Utils:
                 self.UnhookCornService = rospy.ServiceProxy('UnhookCorn', UnhookCorn)
                 self.GoEMService = rospy.ServiceProxy('GoEM', GoEM)
                 self.GoRMService = rospy.ServiceProxy('GoRM', GoRM)
+                self.MoveDispService = rospy.ServiceProxy('MoveDisp', MoveDisp)
             except Exception as e:
                 rospy.logerr("Unable to load manipulation services")
                 raise e
@@ -223,10 +224,10 @@ class Utils:
 class find_cornstalk(smach.State):
     '''
     Find Cornstalk State
-    - Bring arm to home position
+    - Bring arm to scan position
     - Look for cornstalk at multiple angles
     - Move to suitable cornstalk and find maximum width
-    - Bring arm to home position
+    - Hook gripper to the target cornstalk
     '''
 
     def __init__(self, utils):
@@ -301,9 +302,9 @@ class find_cornstalk(smach.State):
                     rospy.logerr("GoScan failed")
                     return 'error'
                 
-                current_stalk = Point(x = self.utils.near_cs[-1][0] + self.utils.x_offset,
+                current_stalk = Point(x = self.utils.near_cs[-1][0],
                                     y = self.utils.near_cs[-1][1],
-                                    z = 0.76)
+                                    z = self.utils.near_cs[-1][2])
 
                 if self.utils.verbose: rospy.loginfo("Calling GoCorn")
                 outcome = self.utils.GoCornService(grasp_point = current_stalk)
@@ -370,6 +371,12 @@ class find_cornstalk(smach.State):
                     rospy.loginfo("Maximum insertion angle is {}".format(self.utils.insertion_ang))
             else:
                 self.utils.insertion_ang = 0
+
+            if self.utils.verbose: rospy.loginfo("Calling HookCorn")
+            outcome = self.utils.HookCornService(grasp_point = current_stalk, insert_angle = self.utils.insertion_ang)
+            if outcome.success == "ERROR":
+                rospy.logerr("HookCorn failed")
+                return 'error'
             
         return 'success'
 
@@ -388,7 +395,7 @@ class visual_servoing(smach.State):
     def __init__(self, utils):
         smach.State.__init__(self,
                             outcomes = ['success','error'],
-                            input_keys = ['state_3_ip'])
+                            input_keys = ['state_2_ip'])
         self.utils = utils
 
     def execute(self, userdata):
@@ -396,22 +403,42 @@ class visual_servoing(smach.State):
 
         if self.utils.enable_manipulation:
 
-            # Approach the cornstalk
+            # Get the current stalk position
             current_stalk = Point(x = self.utils.near_cs[-1][0],
                                   y = self.utils.near_cs[-1][1],
-                                  z = 0.76)
-
-            if self.utils.verbose: rospy.loginfo("Calling HookCorn")
-            outcome = self.utils.HookCornService(grasp_point = current_stalk, insert_angle = self.utils.insertion_ang)
-            if outcome.success == "ERROR":
-                rospy.logerr("HookCorn failed")
-                return 'error'
-
+                                  z = self.utils.near_cs[-1][2])
+            current_x_pos = current_stalk.x
             # Implement Visual Servoing algorithm
+            while True:
+                if self.utils.verbose: rospy.loginfo("Fetching current stalk position for visual servoing")
+                try:
+                    perception_output = self.utils.get_grasp(userdata.state_2_ip[0], userdata.state_2_ip[1])
+                    if perception_output == "SUCCESS":
+                        break
+                    else:
+                        rospy.logerr("Perception system failed during visual servoing")
+                except Exception as e:
+                    rospy.logerr(f"Error in perception system: {e}")
+                    return 'error'
+
+                x_stalk = self.utils.near_cs[-1][0] # x-coordinate of detected stalk
+                
+                x_disp = x_stalk - current_x_pos
+
+                if abs(x_disp) < self.utils.target_tolerance:
+                    rospy.loginfo("Aligned with the cornstalk x-center")
+                    break
+                else:
+                    rospy.loginfo(f"Applying x displacement: {x_disp}")
+                    outcome = self.utils.MoveDispService(x_displacement = x_disp, insert_angle = self.utils.insertion_ang) 
+                    if outcome.success == "ERROR":
+                        rospy.logerr("Failed to move arm during visual servoing")
+                        return 'error' 
+                    current_x_pos = outcome.x_position
         
         return 'success'
 
-# State 4: Insertion
+# State 3: Insertion
 class insertion(smach.State):
     '''
     Insertion State
@@ -498,16 +525,16 @@ class FSM:
 
             
             smach.StateMachine.add('Finding_Cornstalk',find_cornstalk(self.utils),
-                                transitions = {'success':'Insertion',
+                                transitions = {'success':'Visual_Servoing',
                                                'error':'stop',
                                                'next':'Finding_Cornstalk',
                                                'reposition':'stop'},
                                 remapping = {'state_1_input':'find_stalk'})
             smach.StateMachine.add('Visual_Servoing',visual_servoing(self.utils),
-                                transitions = {'success':'Finding_Cornstalk',
+                                transitions = {'success':'Insertion',
                                                'error':'stop'})
             smach.StateMachine.add('Insertion',insertion(self.utils),
-                                transitions = {'success':'Finding_Cornstalk',
+                                transitions = {'success':'stop',
                                                'error':'stop'})
         
         sis = smach_ros.IntrospectionServer('server_name', start_state, '/nimo_fsm')
