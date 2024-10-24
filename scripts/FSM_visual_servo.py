@@ -39,6 +39,11 @@ class Utils:
         self.inserts = 0
         self.curr_sensor_slot = 5
         self.sensor_limit = 2  # change how frequent sensor swapping should be
+
+        # Visual servoing param
+        self.vs_distance_limit = 25
+        self.target_tolerance = 5
+        
         if self.enable_navigation:
             self.near_cs = [1] # Initialized so that navigation advances to waypoint instead of reposition
         else:
@@ -407,7 +412,14 @@ class visual_servoing(smach.State):
             current_stalk = Point(x = self.utils.near_cs[-1][0],
                                   y = self.utils.near_cs[-1][1],
                                   z = self.utils.near_cs[-1][2])
-            current_x_pos = current_stalk.x
+            cur_stalk_x = current_stalk.x
+            cur_stalk_y = current_stalk.y
+
+            # Finding the initial gripper position
+            outcome = self.utils.MoveDispService(x_disp=0, y_disp=0 insert_angle = self.utils.insertion_ang) 
+            cur_gripper_x = outcome.x_position
+            cur_gripper_y = outcome.y_position
+
             # Implement Visual Servoing algorithm
             while True:
                 if self.utils.verbose: rospy.loginfo("Fetching current stalk position for visual servoing")
@@ -421,21 +433,31 @@ class visual_servoing(smach.State):
                     rospy.logerr(f"Error in perception system: {e}")
                     return 'error'
 
-                x_stalk = self.utils.near_cs[-1][0] # x-coordinate of detected stalk
+                cur_stalk_x = self.utils.near_cs[-1][0] # x-coordinate of detected stalk
+                cur_stalk_y = self.utils.near_cs[-1][1] # x-coordinate of detected stalk
                 
-                x_disp = x_stalk - current_x_pos
+                x_disp = cur_stalk_x - cur_gripper_x
+                y_disp = cur_stalk_y - cur_gripper_y
 
-                if abs(x_disp) < self.utils.target_tolerance:
+                distance = (x_disp ** 2 + y_disp ** 2) ** 0.5
+
+                if abs(distance) < self.utils.target_tolerance:
                     rospy.loginfo("Aligned with the cornstalk x-center")
                     break
+                elif abs(distance) > self.utils.vs_distance_limit:
+                    rospy.loginfo("Detected different cornstalk")
+                    break
                 else:
-                    rospy.loginfo(f"Applying x displacement: {x_disp}")
-                    outcome = self.utils.MoveDispService(x_displacement = x_disp, insert_angle = self.utils.insertion_ang) 
+                    k_p = 0.7
+                    x_incre = k_p * x_disp
+                    y_incre = k_p * y_disp
+                    rospy.loginfo("Applying x displacement: {} and y_displacement: {}".format(x_disp, y_disp))
+                    outcome = self.utils.MoveDispService(x_disp = x_incre, y_disp = y_incre, insert_angle = self.utils.insertion_ang) 
                     if outcome.success == "ERROR":
                         rospy.logerr("Failed to move arm during visual servoing")
                         return 'error' 
-                    current_x_pos = outcome.x_position
-        
+                    cur_gripper_x = outcome.x_position
+                    cur_gripper_y = outcome.y_position
         return 'success'
 
 # State 3: Insertion
