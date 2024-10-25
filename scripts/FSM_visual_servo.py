@@ -41,8 +41,9 @@ class Utils:
         self.sensor_limit = 2  # change how frequent sensor swapping should be
 
         # Visual servoing param
+        self.k_p = 0.25
         self.vs_distance_limit = 25
-        self.target_tolerance = 5
+        self.target_tolerance = 0.005
         
         if self.enable_navigation:
             self.near_cs = [1] # Initialized so that navigation advances to waypoint instead of reposition
@@ -274,7 +275,7 @@ class find_cornstalk(smach.State):
 
                 # Check for cornstalks
                 if self.utils.enable_perception:
-                    outcome = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
+                    outcome = self.utils.get_grasp(num_frames = userdata.state_1_input[0], timeout = userdata.state_1_input[1])
                     if outcome == "SUCCESS":
                         break
                     elif outcome == "REPOSITION":
@@ -399,8 +400,7 @@ class visual_servoing(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['success','error'],
-                            input_keys = ['state_2_ip'])
+                            outcomes = ['success','error'])
         self.utils = utils
 
     def execute(self, userdata):
@@ -416,30 +416,29 @@ class visual_servoing(smach.State):
             cur_stalk_y = current_stalk.y
 
             # Finding the initial gripper position
-            outcome = self.utils.MoveDispService(x_disp=0, y_disp=0 insert_angle = self.utils.insertion_ang) 
+            outcome = self.utils.MoveDispService(x_disp=0, y_disp=0, insert_angle = self.utils.insertion_ang) 
             cur_gripper_x = outcome.x_position
             cur_gripper_y = outcome.y_position
 
             # Implement Visual Servoing algorithm
+            i_vs = 1
             while True:
-                if self.utils.verbose: rospy.loginfo("Fetching current stalk position for visual servoing")
-                try:
-                    perception_output = self.utils.get_grasp(userdata.state_2_ip[0], userdata.state_2_ip[1])
-                    if perception_output == "SUCCESS":
-                        break
-                    else:
-                        rospy.logerr("Perception system failed during visual servoing")
-                except Exception as e:
-                    rospy.logerr(f"Error in perception system: {e}")
-                    return 'error'
+                if self.utils.verbose: rospy.loginfo("Fetching current stalk position for visual servoing for {} iteration".format(i_vs))
+                outcome = self.utils.GetStalksService(3,10)
 
-                cur_stalk_x = self.utils.near_cs[-1][0] # x-coordinate of detected stalk
-                cur_stalk_y = self.utils.near_cs[-1][1] # x-coordinate of detected stalk
+                if outcome.success == "DONE":
+                    cur_stalk_x = outcome.grasp_points[0].position.x # x-coordinate of detected stalk
+                    cur_stalk_y = outcome.grasp_points[0].position.y # x-coordinate of detected stalk
+                
+                else:
+                    rospy.logerr("Perception system failed during visual servoing")
+                    break
                 
                 x_disp = cur_stalk_x - cur_gripper_x
                 y_disp = cur_stalk_y - cur_gripper_y
 
                 distance = (x_disp ** 2 + y_disp ** 2) ** 0.5
+                rospy.loginfo("The distance is {}".format(distance))
 
                 if abs(distance) < self.utils.target_tolerance:
                     rospy.loginfo("Aligned with the cornstalk x-center")
@@ -448,9 +447,8 @@ class visual_servoing(smach.State):
                     rospy.loginfo("Detected different cornstalk")
                     break
                 else:
-                    k_p = 0.7
-                    x_incre = k_p * x_disp
-                    y_incre = k_p * y_disp
+                    x_incre = self.utils.k_p * x_disp
+                    y_incre = self.utils.k_p * y_disp
                     rospy.loginfo("Applying x displacement: {} and y_displacement: {}".format(x_disp, y_disp))
                     outcome = self.utils.MoveDispService(x_disp = x_incre, y_disp = y_incre, insert_angle = self.utils.insertion_ang) 
                     if outcome.success == "ERROR":
@@ -472,8 +470,7 @@ class insertion(smach.State):
 
     def __init__(self, utils):
         smach.State.__init__(self,
-                            outcomes = ['success','error'],
-                            input_keys = ['state_3_ip'])
+                            outcomes = ['success','error'])
         self.utils = utils
 
     def execute(self, userdata):
