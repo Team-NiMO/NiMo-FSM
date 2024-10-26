@@ -42,7 +42,7 @@ class Utils:
 
         # Visual servoing param
         self.k_p = 0.25
-        self.vs_distance_limit = 25
+        self.vs_distance_limit = 0.25
         self.target_tolerance = 0.005
         
         if self.enable_navigation:
@@ -427,8 +427,21 @@ class visual_servoing(smach.State):
                 outcome = self.utils.GetStalksService(3,10)
 
                 if outcome.success == "DONE":
-                    cur_stalk_x = outcome.grasp_points[0].position.x # x-coordinate of detected stalk
-                    cur_stalk_y = outcome.grasp_points[0].position.y # x-coordinate of detected stalk
+                    # rospy.loginfo(outcome.grasp_points.position.x)
+                    x_sum = 0
+                    y_sum = 0
+                    count = 0
+                    for point in outcome.grasp_points:
+                        x_sum += point.position.x
+                        y_sum += point.position.y
+                        count += 1
+                    cur_stalk_x = x_sum/count # x-coordinate of detected stalk
+                    cur_stalk_y = y_sum/count # x-coordinate of detected stalk
+                    
+                    # mid_point = len(outcome.grasp_points) // 2
+                    # cur_stalk_x = outcome.grasp_points[mid_point].position.x # x-coordinate of detected stalk
+                    # cur_stalk_y = outcome.grasp_points[mid_point].position.y # x-coordinate of detected stalk
+                    rospy.loginfo("cur_stalk_x : {}, cur_stalk_y: {}".format(cur_stalk_x, cur_stalk_y))
                 
                 else:
                     rospy.logerr("Perception system failed during visual servoing")
