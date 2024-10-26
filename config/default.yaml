@@ -10,11 +10,11 @@ debug:
 
   enable_fake_perception: False # For testing purposes, create a fake cornstalk detection
   enable_arc_corn: True
-  enable_replacement: False
+  enable_replacement: True
 
 sensor:
   sensor_fail_threshold: 2      # Number of consecutive sensor fails before replacement
 
 gripper:
-  replacement: manual           # Manual or automatic replacement of the sensor (auto / manual)
-  clean_extend: True            # Whether to extend the linear actuator for cleaning and calibrating
+  replacement: auto             # Manual or automatic replacement of the sensor (auto / manual)
+  clean_extend: False            # Whether to extend the linear actuator for cleaning and calibrating

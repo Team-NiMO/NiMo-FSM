@@ -180,6 +180,9 @@ class replace(smach.State):
         rospy.set_param('pruning_status', False)
         if self.utils.enable_replacement:
 
+            rospy.loginfo(self.utils.inserts % self.utils.sensor_limit == 0)
+            rospy.loginfo(self.utils.curr_sensor_slot > 1)
+
             if self.utils.inserts % self.utils.sensor_limit == 0 and self.utils.curr_sensor_slot >= 1:
                 rospy.logerr("Need to replace sensor")
 
