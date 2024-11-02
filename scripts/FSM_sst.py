@@ -289,7 +289,7 @@ class navigate(smach.State):
     def execute(self, userdata):
         if self.utils.verbose: rospy.loginfo("----- Entering Navigation State -----")
         stat = False
-        rate = rospy.Rate(50000)
+        rate = rospy.Rate(100)
 
         # Moving to the stow arm position
         if self.utils.enable_manipulation:
@@ -321,7 +321,7 @@ class navigate(smach.State):
 
                 rospy.set_param('/delta_step', True)
                 # rospy.set_param('/pruning_status', True)
-                while rospy.get_param('/delta_step') and delta_step_counter <= 2000: 
+                while rospy.get_param('/delta_step') and delta_step_counter <= 1500: 
                     delta_step_counter += 1
 
                 print(delta_step_counter)
