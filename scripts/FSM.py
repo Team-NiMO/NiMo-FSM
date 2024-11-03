@@ -289,7 +289,7 @@ class navigate(smach.State):
     def execute(self, userdata):
         if self.utils.verbose: rospy.loginfo("----- Entering Navigation State -----")
         stat = False
-        rate = rospy.Rate(50000)
+        rate = rospy.Rate(10)
 
         # Moving to the stow arm position
         if self.utils.enable_manipulation:
@@ -303,6 +303,11 @@ class navigate(smach.State):
             
             delta_step_counter = 0
             
+            # point to point navigation
+            rospy.set_param('/nav_done', False)
+            rospy.set_param('/pruning_status', False)
+            rospy.sleep(1)
+
             rospy.set_param('/pruning_status', True)
             while rospy.get_param('/pruning_status'):
                 if rospy.get_param('/nav_done'):
@@ -313,27 +318,34 @@ class navigate(smach.State):
             print("in while")
             stat = True
             rate.sleep()
-            # rospy.set_param('/pruning_status', False)
 
-            
+            rospy.sleep(5)
+
+            # delta step navigation
             if stat:
                 if self.utils.verbose: rospy.loginfo("Calling planner for reposition")
 
-                rospy.set_param('/delta_step', True)
-                # rospy.set_param('/pruning_status', True)
-                while rospy.get_param('/delta_step') and delta_step_counter <= 2000: 
-                    delta_step_counter += 1
+                # rospy.set_param('/delta_step', True)
+                # # rospy.set_param('/pruning_status', True)
+                # while rospy.get_param('/delta_step') and delta_step_counter <= 2000: 
+                #     delta_step_counter += 1
 
-                print(delta_step_counter)
+                # print(delta_step_counter)
                 
 
-                rospy.set_param('/delta_step', False)
-                print(f"status: {rospy.get_param('/delta_step')}")
-                stat = False
-                rate.sleep()
-                # rospy.set_param('/pruning_status', False)
-                print(f"pruning_status: {rospy.get_param('/pruning_status')}")
-                rate.sleep()
+                # rospy.set_param('/delta_step', False)
+                # print(f"status: {rospy.get_param('/delta_step')}")
+                # stat = False
+                # rate.sleep()
+                # # rospy.set_param('/pruning_status', False)
+                # print(f"pruning_status: {rospy.get_param('/pruning_status')}")
+                # rate.sleep()
+
+                rospy.set_param('/delta_step', True)
+                while rospy.get_param('/delta_step'):
+                    pass
+
+                rospy.logwarn("PAST REPOSITION")
 
 
             # Call Planner to reposition if no cornstalks are found
@@ -681,9 +693,9 @@ class insert(smach.State):
     def execute(self, userdata):
         if self.utils.verbose: rospy.loginfo("----- Entering Insert State -----")
 
-        rospy.sleep(25)
+        rospy.sleep(5)
 
-        rospy.set_param('/pruning_status', False)
+        # rospy.set_param('/pruning_status', False)
 
 
         if self.utils.enable_manipulation:
