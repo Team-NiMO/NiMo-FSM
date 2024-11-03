@@ -90,8 +90,10 @@ class Utils:
             try:
                 rospy.wait_for_service('GetWidth', timeout=1)
                 rospy.wait_for_service('GetStalks', timeout=1)
+                rospy.wait_for_service('GetRefinedGrasp', timeout=1)
                 self.GetWidthService = rospy.ServiceProxy('GetWidth', GetWidth)
                 self.GetStalksService = rospy.ServiceProxy('GetStalks', GetStalks)
+                self.GetRefinedGraspService = rospy.ServiceProxy('GetRefinedGrasp', GetRefinedGrasp)
             except Exception as e:
                 rospy.logerr("Unable to load perception services")
                 raise e
@@ -105,7 +107,6 @@ class Utils:
                 rospy.wait_for_service('LookatCorn', timeout=1)
                 rospy.wait_for_service('LookatAngle', timeout=1)
                 rospy.wait_for_service('GoCorn', timeout=1)
-                rospy.wait_for_service('UngoCorn', timeout=1)
                 rospy.wait_for_service('ArcCorn', timeout=1)
                 rospy.wait_for_service('HookCorn', timeout=1)
                 rospy.wait_for_service('UnhookCorn', timeout=1)
@@ -115,7 +116,6 @@ class Utils:
                 self.LookatCornService = rospy.ServiceProxy('LookatCorn', LookatCorn)
                 self.LookatAngleService = rospy.ServiceProxy('LookatAngle', LookatAngle)
                 self.GoCornService = rospy.ServiceProxy('GoCorn', GoCorn)
-                self.UngoCornService = rospy.ServiceProxy('UngoCorn', UngoCorn)
                 self.ArcCornService = rospy.ServiceProxy('ArcCorn', ArcCorn)
                 self.HookCornService = rospy.ServiceProxy('HookCorn', HookCorn)
                 self.UnhookCornService = rospy.ServiceProxy('UnhookCorn', UnhookCorn)
@@ -173,8 +173,8 @@ class Utils:
             if (flag == "DONE"):
 
                 for i, point in enumerate(grasp_points):
-                    grasp_coordinates = (point.position.x, point.position.y, 0.77)
-                    print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={0.8}")
+                    grasp_coordinates = (point.position.x, point.position.y, 0.7)
+                    print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={0.7}")
                     new = True
 
                     if bool(self.near_cs):
@@ -409,44 +409,52 @@ class find_cornstalk(smach.State):
                 return 'error'
 
             # Rotate the end effector left and right to view cornstalks
-            reposition_counter = 0
-            # angle_list = [0, -30, 30]
-            # for angle in angle_list:
-            #     # Rotate end effector while looking at stalk
-            #     outcome = self.utils.LookatAngleService(joint_angle=angle)
-            #     if outcome.success == "ERROR":
-            #         rospy.logerr("LookAtAngle failed")
-            #         return 'error'
-
-            # Check for cornstalks
-            if self.utils.enable_perception:
-                outcome = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
-                if outcome == "REPOSITION":
-                    if self.utils.verbose: rospy.loginfo("No cornstalks found nearby")
-                
-                    # Reset the arm
-                    if self.utils.verbose: rospy.loginfo("Calling GoHome")
-                    outcome = self.utils.GoHomeService()
-                    if outcome.success == "ERROR":
-                        rospy.logerr("GoHome failed")
-                        return 'error'
-                    
-                    return 'reposition'
-                elif outcome == "ERROR":
-                    rospy.logerr("GetStalks failed")
+            reposition_counter = 0 
+            angle_list = [0, -15, 15]
+            for angle in angle_list:
+                # Rotate end effector while looking at stalk
+                outcome = self.utils.LookatAngleService(joint_angle=angle)
+                if outcome.success == "ERROR":
+                    rospy.logerr("LookAtAngle failed")
                     return 'error'
 
-            # Create a fake cornstalk detection if it hasn't already been done
-            elif self.utils.enable_fake_perception and len(self.utils.near_cs) == 0:
-                    self.utils.near_cs.append([0, -0.4, 0.6])
-            
-            if self.utils.enable_arc_corn:
+                # Check for cornstalks
+                if self.utils.enable_perception:
+                    outcome = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
+                    if outcome == "SUCCESS":
+                        break
+                    elif outcome == "REPOSITION":
+                        reposition_counter += 1
+                    elif outcome == "ERROR":
+                        rospy.logerr("GetStalks failed")
+                        return 'error'
+
+                # Create a fake cornstalk detection if it hasn't already been done
+                elif self.utils.enable_fake_perception and len(self.utils.near_cs) == 0:
+                        self.utils.near_cs.append([-0.05, -0.6, 0.6])
+
+                else:
+                    reposition_counter += 1
+
+            # If no cornstalks are found at any angle, reposition
+            if reposition_counter == len(angle_list):
+                # Reset the arm
                 if self.utils.verbose: rospy.loginfo("Calling GoHome")
                 outcome = self.utils.GoHomeService()
                 if outcome.success == "ERROR":
                     rospy.logerr("GoHome failed")
                     return 'error'
                 
+                if self.utils.verbose: rospy.loginfo("No cornstalks found nearby")
+                return 'reposition'
+            
+            if self.utils.verbose: rospy.loginfo("Calling GoHome")
+            outcome = self.utils.GoHomeService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoHome failed")
+                return 'error'
+            
+            if self.utils.enable_arc_corn:
                 # Move to stalk for inspection
                 current_stalk = Point(x = self.utils.near_cs[-1][0],
                                     y = self.utils.near_cs[-1][1],
@@ -508,10 +516,11 @@ class find_cornstalk(smach.State):
                     rospy.logerr("GoCorn failed")
                     return 'error'
                 
-                if self.utils.verbose: rospy.loginfo("Calling UngoCorn")
-                outcome = self.utils.UngoCornService()
+                if self.utils.verbose: rospy.loginfo("Calling GoHome")
+                outcome = self.utils.GoHomeService()
                 if outcome.success == "ERROR":
-                    rospy.logerr("UngoCorn failed")
+                    rospy.logerr("GoHome failed")
+                    return 'error'
 
                 if len(width_ang) == 0:
                     rospy.logerr("GetWidth failed on every angle. Continuing at angle 0")
@@ -711,8 +720,38 @@ class insert(smach.State):
                                   y = self.utils.near_cs[-1][1],
                                   z = self.utils.near_cs[-1][2])
             
+            if self.utils.verbose: rospy.loginfo("Calling GoCorn")
+            outcome = self.utils.GoCornService(grasp_point = current_stalk)
+            if outcome.success == "ERROR":
+                rospy.logerr("GoCorn failed")
+                return 'error'
+            
+            if self.utils.enable_perception:
+                diff = 999
+                trials = 0
+                while diff >= 0.003 and trials < 3:
+                    if self.utils.verbose: rospy.loginfo("Calling GetRefinedGrasp")
+                    outcome = self.utils.GetRefinedGraspService(num_frames = 3, timeout = 10.0, initial_grasp_point = current_stalk)
+                    if outcome.success == "ERROR":
+                        rospy.logerr("GetRefinedGrasp failed")
+                        return 'error'
+                    
+                    diff = np.linalg.norm(np.array([current_stalk.x, current_stalk.y]) - np.array([outcome.refined_grasp_point.x, outcome.refined_grasp_point.y]))
+                    current_stalk = outcome.refined_grasp_point
+                    
+                    rospy.loginfo("Refined difference = %.2f" % diff)
+
+                    if self.utils.verbose: rospy.loginfo("Calling GoCorn")
+                    outcome = self.utils.GoCornService(grasp_point = current_stalk)
+                    if outcome.success == "ERROR":
+                        rospy.logerr("GoCorn failed")
+                        return 'error'
+
+                    trials += 1
+                    time.sleep(10)
+            
             if self.utils.verbose: rospy.loginfo("Calling HookCorn")
-            outcome = self.utils.HookCornService(grasp_point = current_stalk, insert_angle = self.utils.insertion_ang)
+            outcome = self.utils.HookCornService(insert_angle = self.utils.insertion_ang)
             if outcome.success == "ERROR":
                 rospy.logerr("HookCorn failed")
                 return 'error'
@@ -761,6 +800,12 @@ class insert(smach.State):
             outcome = self.utils.UnhookCornService()
             if outcome.success == "ERROR":
                 rospy.logerr("Unhook failed")
+                return 'error'
+            
+            if self.utils.verbose: rospy.loginfo("Calling GoHome")
+            outcome = self.utils.GoHomeService()
+            if outcome.success == "ERROR":
+                rospy.logerr("GoHome failed")
                 return 'error'
                 
         return 'success'
@@ -847,7 +892,7 @@ class FSM:
             smach.StateMachine.add('Insertion',insert(self.utils),
                                 transitions = {'success':'Navigate',
                                                'error':'stop',
-                                               'replace':'Replace'})
+                                               'replace':'Navigate'})
             
             smach.StateMachine.add('Replace',replace(self.utils),
                                 transitions = {'success':'Finding_Cornstalk',
