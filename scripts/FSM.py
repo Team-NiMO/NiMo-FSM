@@ -13,10 +13,10 @@ import time
 
 from nimo_perception.srv import *
 from nimo_manipulation.srv import *
-# from nimo_end_effector.srv import *
-# from act_pump.srv import *
+from nimo_end_effector.srv import *
+from act_pump.srv import *
 
-# from amiga_path_planning.srv import *
+from amiga_path_planning.srv import *
 
 class Utils:
 
@@ -682,6 +682,7 @@ class insert(smach.State):
                         return 'error'
 
                     trials += 1
+                    time.sleep(10)
             
             if self.utils.verbose: rospy.loginfo("Calling HookCorn")
             outcome = self.utils.HookCornService(insert_angle = self.utils.insertion_ang)
