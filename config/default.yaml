@@ -2,18 +2,19 @@ debug:
   verbose: True                 # Whether to log information and warnings
   
   # Enable or disable subsystems for testing
-  enable_perception: True
+  enable_perception: False
   enable_manipulation: True
   enable_end_effector: False
   enable_external_mechanisms: False 
-  enable_navigation: False
+  enable_navigation: True
+  enable_ui: False
 
-  enable_fake_perception: False # For testing purposes, create a fake cornstalk detection
-  enable_arc_corn: False
+  enable_fake_perception: True # For testing purposes, create a fake cornstalk detection
+  enable_arc_corn: True
 
 sensor:
   sensor_fail_threshold: 3      # Number of consecutive sensor fails before replacement
 
 gripper:
-  replacement:                  # Manual or automatic replacement of the sensor (auto / manual)
+  replacement:  manual          # Manual or automatic replacement of the sensor (auto / manual)
   clean_extend: False           # Whether to extend the linear actuator for cleaning and calibrating

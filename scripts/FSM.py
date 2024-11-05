@@ -12,7 +12,7 @@ import datetime
 import time
 
 # from nimo_perception.srv import *
-# from nimo_manipulation.srv import *
+from nimo_manipulation.srv import *
 # from nimo_end_effector.srv import *
 # from act_pump.srv import *
 
@@ -37,10 +37,7 @@ class Utils:
         self.threshold = 0.1
         self.insertion_ang = None
         self.sensor_fail_num = 0
-        if self.enable_navigation:
-            self.near_cs = [1] # Initialized so that navigation advances to waypoint instead of reposition
-        else:
-            self.near_cs = []
+        self.near_cs = []
 
         # Setup data file
         try:
@@ -303,23 +300,29 @@ class navigate(smach.State):
             
             delta_step_counter = 0
             
-            # point to point navigation
-            rospy.set_param('/nav_done', False)
+            # point to point navigation            
+            rospy.sleep(5)
             rospy.set_param('/pruning_status', False)
-            rospy.sleep(1)
+            rospy.sleep(5)
+            rospy.set_param('/nav_done', False)
 
             rospy.set_param('/pruning_status', True)
+            rospy.sleep(0.05)
             while rospy.get_param('/pruning_status'):
+                # print("moving")
                 if rospy.get_param('/nav_done'):
-                    print("in if")
+                    # print("in if")
                     break
                 pass
 
-            print("in while")
+            # print("in while")
             stat = True
             rate.sleep()
 
             rospy.sleep(5)
+
+            # Reset Cornstalk list
+            self.utils.near_cs = []
 
             # delta step navigation
             if stat:
@@ -417,7 +420,10 @@ class find_cornstalk(smach.State):
                 if outcome.success == "ERROR":
                     rospy.logerr("LookAtAngle failed")
                     return 'error'
-
+                
+                rospy.logwarn(self.utils.near_cs)
+                rospy.logwarn(self.utils.enable_fake_perception)
+                rospy.logwarn(reposition_counter)
                 # Check for cornstalks
                 if self.utils.enable_perception:
                     outcome = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
