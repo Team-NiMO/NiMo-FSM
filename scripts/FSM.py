@@ -11,7 +11,7 @@ import os
 import datetime
 import time
 
-# from nimo_perception.srv import *
+from nimo_perception.srv import *
 from nimo_manipulation.srv import *
 # from nimo_end_effector.srv import *
 # from act_pump.srv import *
@@ -37,7 +37,12 @@ class Utils:
         self.threshold = 0.1
         self.insertion_ang = None
         self.sensor_fail_num = 0
-        self.near_cs = []
+        if self.enable_navigation:
+            self.near_cs = [1]
+        else:
+            self.near_cs = []
+
+        self.delta_step_count = 0
 
         # Setup data file
         try:
@@ -145,16 +150,6 @@ class Utils:
                 rospy.logerr("Unable to load external mechanisms services")
                 raise e
 
-        # # Load Navigation Services
-        # if self.enable_navigation:
-        #     if self.verbose: rospy.loginfo("Waiting for external mechanisms services")
-        #     try:
-        #         rospy.wait_for_service('navigation', timeout=1)
-        #         self.PlanningService = rospy.ServiceProxy('navigation', navigation)
-        #     except Exception as e:
-        #         rospy.logerr("Unable to load navigation services")
-        #         raise e
-
     def get_grasp (self, num_frames, timeout):
 
         rospy.loginfo('Finding nearest Cornstalk')
@@ -170,8 +165,8 @@ class Utils:
             if (flag == "DONE"):
 
                 for i, point in enumerate(grasp_points):
-                    grasp_coordinates = (point.position.x, point.position.y, 0.7)
-                    print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={0.7}")
+                    grasp_coordinates = (point.position.x, point.position.y, 0.77)
+                    print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={0.77}")
                     new = True
 
                     if bool(self.near_cs):
@@ -216,59 +211,6 @@ class Utils:
             if outcome.success == "ERROR":
                 rospy.logerr("ControlPumps Off failed")
 
-# # State 0: Global Navigate
-# class global_navigate(smach.State):
-#     '''
-#     Global Navigation State
-#     - Check Global Navigation parameter
-#     '''
-
-#     def __init__(self, utils):
-#         smach.State.__init__(self,
-#                             outcomes = ['success','error','restart'])
-        
-#         self.utils = utils
-    
-#     def execute(self, userdata):
-#         if self.utils.verbose: rospy.loginfo("----- Entering Global Navigation State -----")
-
-#         if self.utils.enable_ui:
-#             rospy.loginfo("Waiting for UI")
-            
-#             try:
-#                 ui_stat = rospy.get_param('/ui_stat')
-#             except:
-#                 ui_stat = False
-
-#             while not ui_stat:
-#                 try:
-#                     ui_stat = rospy.get_param('/ui_stat')
-#                 except:
-#                     pass
-
-#         # Moving to the stow arm position
-#         if self.utils.enable_manipulation:
-#             if self.utils.verbose: rospy.loginfo("Calling GoStow")
-#             outcome = self.utils.GoStowService()
-#             if outcome.success == "ERROR":
-#                 rospy.logerr("GoStow failed")
-#                 return 'error'
-
-#         if self.utils.enable_navigation:
-#             outcome = rospy.get_param('/global_nav_stat')
-
-#             # If global_nav_stat is false, already in field -> navigate to next waypoint
-#             if not outcome:
-#                 if self.utils.verbose: rospy.loginfo("Restart detected, moving to next waypoint")
-#                 return 'restart'
-            
-#             # Otherwise, wait for navigation to complete
-#             if self.utils.verbose: rospy.loginfo("Waiting for global navigation to complete...")
-#             while not rospy.get_param('/nav_stat'): pass
-            
-#         return 'success'
-            
-
 # State 1: Navigate
 class navigate(smach.State):
     '''
@@ -297,82 +239,35 @@ class navigate(smach.State):
                 return 'error'
 
         if self.utils.enable_navigation:
-            
-            delta_step_counter = 0
-            
-            # point to point navigation            
-            rospy.sleep(5)
-            rospy.set_param('/pruning_status', False)
-            rospy.sleep(5)
-            rospy.set_param('/nav_done', False)
-
-            rospy.set_param('/pruning_status', True)
-            rospy.sleep(0.05)
-            while rospy.get_param('/pruning_status'):
-                # print("moving")
-                if rospy.get_param('/nav_done'):
-                    # print("in if")
-                    break
-                pass
-
-            # print("in while")
-            stat = True
-            rate.sleep()
-
-            rospy.sleep(5)
-
-            # Reset Cornstalk list
-            self.utils.near_cs = []
-
-            # delta step navigation
-            if stat:
+            # Call Planner to reposition if no cornstalks are found
+            if len(self.utils.near_cs) == 0 and self.utils.delta_step_count == 0:
                 if self.utils.verbose: rospy.loginfo("Calling planner for reposition")
-
-                # rospy.set_param('/delta_step', True)
-                # # rospy.set_param('/pruning_status', True)
-                # while rospy.get_param('/delta_step') and delta_step_counter <= 2000: 
-                #     delta_step_counter += 1
-
-                # print(delta_step_counter)
-                
-
-                # rospy.set_param('/delta_step', False)
-                # print(f"status: {rospy.get_param('/delta_step')}")
-                # stat = False
-                # rate.sleep()
-                # # rospy.set_param('/pruning_status', False)
-                # print(f"pruning_status: {rospy.get_param('/pruning_status')}")
-                # rate.sleep()
 
                 rospy.set_param('/delta_step', True)
                 while rospy.get_param('/delta_step'):
                     pass
+                self.utils.delta_step_count += 1
 
-                rospy.logwarn("PAST REPOSITION")
+            # Call Planner to advance to next waypoint if cornstalks have been found
+            else:
+                # point to point navigation            
+                rospy.sleep(5)
+                rospy.set_param('/pruning_status', False)
+                rospy.sleep(5)
+                rospy.set_param('/nav_done', False)
 
+                rospy.set_param('/pruning_status', True)
+                rospy.sleep(0.05)
+                while rospy.get_param('/pruning_status'):
+                    if rospy.get_param('/nav_done'):
+                        break
+                    pass
 
-            # Call Planner to reposition if no cornstalks are found
-            # if len(self.utils.near_cs) == 0:
-            #     if self.utils.verbose: rospy.loginfo("Calling planner for reposition")
-                # input = Bool()
-                # input.data = False
-                # outcome = self.utils.PlanningService(input)
+                self.utils.delta_step_count = 0
 
-            # # Call Planner to advance to next waypoint if cornstalks have been found
-            # else:
-            #     if self.utils.verbose: rospy.loginfo("Calling planner for next waypoint")
-        
-                
-            # # Wait for navigation to complete
-            # if self.utils.verbose: rospy.loginfo("Waiting for navigation to complete...")
-            # rospy.set_param('/pruning_status', True)
-
-            # # while rospy.get_param('/pruning_status', True): pass
-            #     # rate.sleep()
-
-            # # Reset cornstalk list
-            # # NOTE: Since the cornstalks are stored in the frame of the arm, they need to be reset after moving the base
-            # self.utils.near_cs = []
+            # Reset cornstalk list
+            # NOTE: Since the cornstalks are stored in the frame of the arm, they need to be reset after moving the base
+            self.utils.near_cs = []
 
         return 'success'
 
@@ -421,9 +316,6 @@ class find_cornstalk(smach.State):
                     rospy.logerr("LookAtAngle failed")
                     return 'error'
                 
-                rospy.logwarn(self.utils.near_cs)
-                rospy.logwarn(self.utils.enable_fake_perception)
-                rospy.logwarn(reposition_counter)
                 # Check for cornstalks
                 if self.utils.enable_perception:
                     outcome = self.utils.get_grasp(userdata.state_1_input[0], userdata.state_1_input[1])
@@ -740,7 +632,9 @@ class insert(smach.State):
                     outcome = self.utils.GetRefinedGraspService(num_frames = 3, timeout = 10.0, initial_grasp_point = current_stalk)
                     if outcome.success == "ERROR":
                         rospy.logerr("GetRefinedGrasp failed")
-                        return 'error'
+                        trials += 1
+                        continue
+                        # return 'error'
                     
                     diff = np.linalg.norm(np.array([current_stalk.x, current_stalk.y]) - np.array([outcome.refined_grasp_point.x, outcome.refined_grasp_point.y]))
                     current_stalk = outcome.refined_grasp_point
@@ -884,7 +778,7 @@ class FSM:
                                                'stop':'stop'})
 
             smach.StateMachine.add('Finding_Cornstalk',find_cornstalk(self.utils),
-                                transitions = {'success':'Cleaning_Calibrating',
+                                transitions = {'success':'Insertion',
                                                'error':'stop',
                                                'next':'Finding_Cornstalk',
                                                'reposition':'Navigate'},
