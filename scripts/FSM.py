@@ -13,8 +13,8 @@ import time
 
 from nimo_perception.srv import *
 from nimo_manipulation.srv import *
-# from nimo_end_effector.srv import *
-# from act_pump.srv import *
+from nimo_end_effector.srv import *
+from act_pump.srv import *
 
 # from amiga_path_planning.srv import *
 # from mpc_amiga.srv import *
@@ -329,7 +329,7 @@ class find_cornstalk(smach.State):
 
                 # Create a fake cornstalk detection if it hasn't already been done
                 elif self.utils.enable_fake_perception and len(self.utils.near_cs) == 0:
-                        self.utils.near_cs.append([-0.05, -0.6, 0.6])
+                        self.utils.near_cs.append([-0.2, -0.38, 0.77])
 
                 else:
                     reposition_counter += 1
@@ -600,11 +600,6 @@ class insert(smach.State):
     def execute(self, userdata):
         if self.utils.verbose: rospy.loginfo("----- Entering Insert State -----")
 
-        rospy.sleep(5)
-
-        # rospy.set_param('/pruning_status', False)
-
-
         if self.utils.enable_manipulation:
             # Reset the arm
             if self.utils.verbose: rospy.loginfo("Calling GoHome")
@@ -778,7 +773,7 @@ class FSM:
                                                'stop':'stop'})
 
             smach.StateMachine.add('Finding_Cornstalk',find_cornstalk(self.utils),
-                                transitions = {'success':'Insertion',
+                                transitions = {'success':'Cleaning_Calibrating',
                                                'error':'stop',
                                                'next':'Finding_Cornstalk',
                                                'reposition':'Navigate'},
