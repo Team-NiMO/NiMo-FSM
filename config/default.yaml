@@ -2,14 +2,14 @@ debug:
   verbose: True                 # Whether to log information and warnings
   
   # Enable or disable subsystems for testing
-  enable_perception: False
+  enable_perception: True
   enable_manipulation: True
-  enable_end_effector: False
-  enable_external_mechanisms: False 
+  enable_end_effector: True
+  enable_external_mechanisms: True
   enable_navigation: True
-  enable_ui: False
+  enable_ui: True
 
-  enable_fake_perception: True # For testing purposes, create a fake cornstalk detection
+  enable_fake_perception: False  # For testing purposes, create a fake cornstalk detection
   enable_arc_corn: True
 
 sensor:
@@ -17,4 +17,4 @@ sensor:
 
 gripper:
   replacement:  manual          # Manual or automatic replacement of the sensor (auto / manual)
-  clean_extend: False           # Whether to extend the linear actuator for cleaning and calibrating
+  clean_extend: True            # Whether to extend the linear actuator for cleaning and calibrating

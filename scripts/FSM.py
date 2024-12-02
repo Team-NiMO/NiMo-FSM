@@ -16,9 +16,6 @@ from nimo_manipulation.srv import *
 from nimo_end_effector.srv import *
 from act_pump.srv import *
 
-# from amiga_path_planning.srv import *
-# from mpc_amiga.srv import *
-
 class Utils:
 
     def __init__(self):
@@ -165,8 +162,8 @@ class Utils:
             if (flag == "DONE"):
 
                 for i, point in enumerate(grasp_points):
-                    grasp_coordinates = (point.position.x, point.position.y, 0.77)
-                    print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={0.77}")
+                    grasp_coordinates = (point.position.x, point.position.y, 0.79)
+                    print(f"Grasp Point {i}: x={point.position.x}, y={point.position.y}, z={0.79}")
                     new = True
 
                     if bool(self.near_cs):
@@ -230,6 +227,16 @@ class navigate(smach.State):
         stat = False
         rate = rospy.Rate(10)
 
+        # Wait for UI to start navigation
+        if self.utils.enable_ui:
+            try:
+                rospy.get_param('/ui_stat')
+            except:
+                rospy.set_param('/ui_stat', False)
+                
+            while not rospy.get_param('/ui_stat'):
+                pass
+
         # Moving to the stow arm position
         if self.utils.enable_manipulation:
             if self.utils.verbose: rospy.loginfo("Calling GoStow")
@@ -250,10 +257,12 @@ class navigate(smach.State):
 
             # Call Planner to advance to next waypoint if cornstalks have been found
             else:
-                # point to point navigation            
-                rospy.sleep(5)
+                # point to point navigation
+                # rospy.sleep(5)
+                # rospy.set_param('/final_done', False)       
+                rospy.sleep(2)
                 rospy.set_param('/pruning_status', False)
-                rospy.sleep(5)
+                rospy.sleep(2)
                 rospy.set_param('/nav_done', False)
 
                 rospy.set_param('/pruning_status', True)
@@ -262,6 +271,12 @@ class navigate(smach.State):
                     if rospy.get_param('/nav_done'):
                         break
                     pass
+                
+                rospy.sleep(0.05)
+                if rospy.get_param('/final_done'):
+                    return 'stop'
+
+                rospy.sleep(5)
 
                 self.utils.delta_step_count = 0
 
@@ -487,9 +502,9 @@ class clean_calibrate(smach.State):
                     rospy.logerr("ControlPumps Pump1 failed")
                     return 'error'
                 
-                # Wait for 15s before turning pumps off
-                rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
-                time.sleep(15)
+                # Wait for 5s before turning pumps off
+                rospy.timer.Timer(rospy.rostime.Duration(5), self.utils.callback, oneshot=True)
+                time.sleep(5)
 
             # Move the end effector to the low calibration pump
             if self.utils.verbose: rospy.loginfo("Calling GoEM Low Calibration")
@@ -507,7 +522,7 @@ class clean_calibrate(smach.State):
                     return 'error'
                 
                 # Wait for 15s before turning pumps off
-                rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
+                rospy.timer.Timer(rospy.rostime.Duration(5), self.utils.callback, oneshot=True)
 
                 # Record reading for low calibration
                 if self.utils.enable_end_effector:
@@ -533,7 +548,7 @@ class clean_calibrate(smach.State):
                     return 'error'
                 
                 # Wait for 15s before turning pumps off
-                rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
+                rospy.timer.Timer(rospy.rostime.Duration(5), self.utils.callback, oneshot=True)
 
                 # Record reading for high calibration
                 if self.utils.enable_end_effector:
@@ -542,25 +557,6 @@ class clean_calibrate(smach.State):
                     if outcome.flag == "ERROR":
                         rospy.logerr("GetCalDat High Calibration failed")
                         return 'error'
-                    
-            # Move the end effector to the cleaning pump
-            if self.utils.verbose: rospy.loginfo("Calling GoEM Clean")
-            outcome = self.utils.GoEMService("clean")
-            if outcome.success == "ERROR":
-                rospy.logerr("GoEM Clean failed")
-                return 'error'
-
-            # Turn on the cleaning pump
-            if self.utils.enable_external_mechanisms:
-                if self.utils.verbose: rospy.loginfo("Calling ControlPumps Pump1")
-                outcome = self.utils.ControlPumpsService("pump1")
-                if outcome.success == "ERROR":
-                    rospy.logerr("ControlPumps Pump1 failed")
-                    return 'error'
-                
-                # Wait for 15s before turning pumps off
-                rospy.timer.Timer(rospy.rostime.Duration(15), self.utils.callback, oneshot=True)
-                time.sleep(15)
 
             # Retract the linear actuator
             if self.utils.enable_end_effector and self.utils.clean_extend:
@@ -622,7 +618,7 @@ class insert(smach.State):
             if self.utils.enable_perception:
                 diff = 999
                 trials = 0
-                while diff >= 0.003 and trials < 3:
+                while diff >= 0.003 and trials < 1:
                     if self.utils.verbose: rospy.loginfo("Calling GetRefinedGrasp")
                     outcome = self.utils.GetRefinedGraspService(num_frames = 3, timeout = 10.0, initial_grasp_point = current_stalk)
                     if outcome.success == "ERROR":
@@ -643,7 +639,7 @@ class insert(smach.State):
                         return 'error'
 
                     trials += 1
-                    time.sleep(10)
+                    time.sleep(2)
             
             if self.utils.verbose: rospy.loginfo("Calling HookCorn")
             outcome = self.utils.HookCornService(insert_angle = self.utils.insertion_ang)
@@ -672,7 +668,7 @@ class insert(smach.State):
                     # pose_str = "{}, {}".format(self.utils.current_pose.position.x, self.utils.current_pose.position.y)
                     
                     # Publish nitrate reading
-                    self.utils.nitrateSample.publish(Float32(outcome.nit_val))
+                    self.utils.nitrateSample.publish(Float32(outcome.nitrate_val))
 
                     # f = open(self.utils.package_path+"/output/RUN{}.csv".format(self.utils.run_index), "a")
                     # if self.utils.verbose: rospy.loginfo("Writing nitrate value {} PPM to RUN{}.csv".format(outcome.nitrate_val, self.utils.run_index))
