@@ -10,26 +10,23 @@ We have split this system into four subsystems:
 - [Manipulation](https://github.com/Team-NiMO/NiMo-Manipulation) - Control the arm to accomplish system tasks
 - [External Mechanisms](https://github.com/Team-NiMO/NiMo-ExternalMechanisms) - Dispsense the cleaning and calibration solution
 - [End Effector](https://github.com/Team-NiMO/NiMo-EndEffector) - Control the insertion and reading of the nitrate sensor
+- [Navigation](https://github.com/Team-NiMO/MPC_Amiga) - Control the Amiga mobile base to navigate to sampling locations
+- [User Interface](https://github.com/Team-NiMO/NiMo-UI) - Allow the user to input sampling locations and recieve feedback from the system
 
 More information about the communication between the FSM and these subsystems is shown in the figure below:
 
 <img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/fsm.drawio.png" width="650">
 
 The overall flow of the FSM is motivated by the functional architecture shown below. The FSM is broken into six states:
-- `Global` - Check whether it is necessary to navigate to field or continue to next waypoint
-    - `global_nav_stat` : True -> Global navigation in progress | False -> amiga already in field
 - `Navigation` - Navigate to next waypoint or delta step depending on cornstalk success
-    - `found_plan` : True -> Plan has been found | False -> Plan has not been found
-    - `more_waypoints` : True -> More waypoints exist | False -> All waypoints have been exhausted
 - `Finding_Cornstalk` - Detecting cornstalks in the area and selecting one to determine the optimal insertion side
 - `Cleaning_Calibrating` - Cleaning and calibrating the sensor to calibrate and check sensor functionality 
 - `Insertion` - Grasping the cornstalk, inserting the sensor, and taking readings from nitrate sensor
-- `Replace` - Depending on the end-effector, moving to manually or automatically replace a broken sensor
 
 <img src="https://github.com/Team-NiMO/NiMo-FSM/blob/main/docs/IntegrationFunctional.drawio.png" width="650">
 
 ## Installation
-Create a new ROS workspace and follow the installation instructions for all subsystems ([Perception](https://github.com/Team-NiMO/NiMo-Perception_v2), [Manipulation](https://github.com/Team-NiMO/NiMo-Manipulation), [External Mechanisms](https://github.com/Team-NiMO/NiMo-ExternalMechanisms), [End Effector](https://github.com/Team-NiMO/NiMo-EndEffector)). If desired, also source the workspace in `~/.bashrc`.
+Create a new ROS workspace and follow the installation instructions for all subsystems ([Perception](https://github.com/Team-NiMO/NiMo-Perception_v2), [Manipulation](https://github.com/Team-NiMO/NiMo-Manipulation), [External Mechanisms](https://github.com/Team-NiMO/NiMo-ExternalMechanisms), [End Effector](https://github.com/Team-NiMO/NiMo-EndEffector), [Navigation](https://github.com/Team-NiMO/MPC_Amiga), [User Interface](https://github.com/Team-NiMO/NiMo-UI)). If desired, also source the workspace in `~/.bashrc`.
 ```
 mkdir ~/nimo_ws && mkdir ~/nimo_ws/src
 echo "source ~/nimo_ws/devel/setup.bash" >> ~/.bashrc
@@ -47,25 +44,12 @@ cd ../ && catkin_make
 Install ROS SMACH and terminator
 ```
 sudo apt-get install ros-noetic-smach-ros
-sudo apt-get install terminator
-```
-
-Move the [terminator config](/docs/config) to the terminator configuration folder. If you already have terminator configs, you will need to merge the `nimo` config with your existing config file.
-```
-cp docs/config ~/.config/terminator/
 ```
 
 Finally, update the [configuration file](/config/default.yaml) if necessary.
 
 ## Use
-There are two methods to launch the system: 
-- Manually via multiple terminal commmands
-- Automatically via a terminator config
-    - This method was chosen over a launch file so that the individual systems could be monitored separately
 
-These methods will launch every node sequentially and display visualization tools mentioned in the next section.
-
-### Launching Manually
 In separate terminals, run each of the following commands. If the workspace has not been sourced in the `~/.bashrc` you will have to manually source it for each terminal.
 
 ```
@@ -73,14 +57,9 @@ roslaunch nimo_perception StalkDetect.launch
 roslaunch nimo_manipulation nimo_manipulation.launch
 roslaunch nimo_end_effector nimo_end_effector.launch
 rosrun act_pump actp.py
+rosrun nimo_ui ui.py
+roslaunch mpc_amiga_mrsd mpc_amiga_mrsd.launch fresh_start:=1
 rosrun NiMo-FSM FSM.py
-```
-
-### Launching Automatically
-From specifically terminal (not terminator) run the following commands.
-```
-pkill terminator
-terminator -l nimo
 ```
 
 ## Visualization
@@ -99,12 +78,11 @@ For swapping end effectors, refer to [swap.md](/docs/swap.md).
 
 All errors should appear on the FSM terminal, if the error is not with the FSM itself, determine which subsystem is causing an error and refer to the errors in that terminal for more details.
 
-**Terminal doesn't load properly**
-
-If terminator is not killed properly, the windows may not load in the correct configuration. If this is the case, kill terminator and restart.
-
 **Serial Port Issues**
 
 Since both the external mechanisms and end effector use serial communication, if the communication is interrupted, the port may change. Launching the Arduino application and checking the ports can determine which device is linked to which port. More detailed instructions can be found in the respective repositories ([External Mechanisms](https://github.com/Team-NiMO/NiMo-ExternalMechanisms), [End Effector](https://github.com/Team-NiMO/NiMo-EndEffector)).
 
 ## Acknowledgements
+- Dr. Oliver Kroemer for his assistance and advice
+- Dr. George Kantor for his assistance and advice
+- [Mark (Moonyoung) Lee](https://github.com/markmlee) for his assistance and advice
